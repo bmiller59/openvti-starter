@@ -16,11 +16,14 @@
 // Labels: the same provenance labels the published images carry (pinned ref, upstream source, Dockerfile sha256,
 //         features, build-origin=local); `npm run images:verify --local` and `images:compare` read them (docs/VERIFY.md).
 // Tags: <image>:<short-sha> and <image>:local (what compose defaults to).
+// The exported source directory is removed even when you interrupt the build. Older builds stay as superseded images: `npm run clean` lists and removes them.
 import "./lib/cli.js";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { onSignalKill, removeTempDir, trackedTempDir } from "./lib/tmpdirs.js";
+import { supersededHintNow } from "./lib/clean-real.js";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { die, env, modeInfo, vtcChoice } from "./env.js";
@@ -52,7 +55,15 @@ try { limits = limitsFromEnv({ BUILD_MEMORY: env("BUILD_MEMORY"), BUILD_CPUS: en
 console.log(limitsNote(limits) + (engine === "docker" ? "" : `  [engine: ${engine}]`));
 if (limits && engine === "docker") { const err = ensureBuilder(limits); if (err) die(err); }
 /** `docker build <args>`, niced and (unless BUILD_LIMITS=0) run in the memory/CPU-capped builder. */
-const dockerBuild = (args: string[]) => { const [cmd, ...rest] = engine === "docker" ? limitedBuildArgv(limits, args) : ["nice", "-n", "10", engine, "build", ...(limits ? ["--memory", limits.memory, "--memory-swap", limits.memory, "--cpu-period", "100000", "--cpu-quota", String(Math.round(limits.cpus * 100000))] : []), ...args]; sh(cmd, rest); };
+const dockerBuild = async (args: string[]) => {
+  const [cmd, ...rest] = engine === "docker" ? limitedBuildArgv(limits, args) : ["nice", "-n", "10", engine, "build", ...(limits ? ["--memory", limits.memory, "--memory-swap", limits.memory, "--cpu-period", "100000", "--cpu-quota", String(Math.round(limits.cpus * 100000))] : []), ...args];
+  // Async (not spawnSync) so SIGINT/SIGTERM reach our handler while the build runs: it stops the build and removes the export directory (lib/tmpdirs.ts).
+  const child = spawn(cmd, rest, { stdio: "inherit" });
+  onSignalKill(() => child.kill("SIGTERM"));
+  const status = await new Promise<number | null>((done) => { child.on("error", () => done(null)); child.on("close", (code) => done(code)); });
+  onSignalKill(undefined);
+  if (status !== 0) die(`\`${cmd} ${rest.join(" ")}\` failed (exit ${status}).`);
+};
 const repo = resolve(process.env.VTI_PATH ?? "../verifiable-trust-infrastructure");
 const local = process.env.VTI_LOCAL === "1";
 const sha256 = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
@@ -68,7 +79,7 @@ function availKb(): number | undefined {
   } catch { return undefined; /* not Linux */ }
 }
 
-function buildMediator(): void {
+async function buildMediator(): Promise<void> {
   const m = pins().messaging.mediator;
   const short = m.ref.slice(0, 8);
   console.log(MEDIATOR_BUILD_NOTICE);
@@ -78,7 +89,7 @@ function buildMediator(): void {
   const dockerfile = resolve("docker/mediator.Dockerfile");
   const labels = labelArgs(buildLabels("mediator", pins(), { dockerfileSha256: sha256(dockerfile) }));
   console.log(`building ${tags.join(", ")} from ${m.repo} @ ${m.ref} (mediator ${m.version}, features ${m.features})`);
-  dockerBuild(["-f", dockerfile, "--build-arg", `MEDIATOR_REF=${m.ref}`, "--build-arg", `FEATURES=${m.features}`, ...labels, ...tags.flatMap((t) => ["-t", t]), resolve("docker")]);
+  await dockerBuild(["-f", dockerfile, "--build-arg", `MEDIATOR_REF=${m.ref}`, "--build-arg", `FEATURES=${m.features}`, ...labels, ...tags.flatMap((t) => ["-t", t]), resolve("docker")]);
 }
 
 /** The VTA and VTC are built from a checkout of the upstream repository. Offer the clone, never do it unasked. */
@@ -107,7 +118,7 @@ async function buildOne(name: "vta" | "vtc"): Promise<void> {
   let tmp = "";
   if (!local) {
     await ensureCheckout(ref, tag);
-    tmp = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "vti-"));
+    tmp = trackedTempDir(process.env.TMPDIR ?? tmpdir(), "vti-"); // removed on any exit, including Ctrl-C
     sh("sh", ["-c", `git -C '${repo}' archive ${ref} | tar -x -C '${tmp}'`]);
     ctx = tmp;
   }
@@ -118,9 +129,9 @@ async function buildOne(name: "vta" | "vtc"): Promise<void> {
     // The VTA needs `tsp` for MODE=tunnel and the VTI Dockerfile's default feature list lacks it (pins.json vta.features).
     const features = name === "vta" && vti.vta.features ? ["--build-arg", `FEATURES=${vti.vta.features}`] : [];
     const labels = labelArgs(buildLabels(name, pins(), { dockerfileSha256: sha256(file), ref: local ? "local" : undefined }));
-    dockerBuild(["-f", file, "--build-arg", `VTI_REF=${local ? "local" : ref}`, ...features, ...labels, ...tags.flatMap((t) => ["-t", t]), ctx]);
+    await dockerBuild(["-f", file, "--build-arg", `VTI_REF=${local ? "local" : ref}`, ...features, ...labels, ...tags.flatMap((t) => ["-t", t]), ctx]);
   } finally {
-    if (tmp) rmSync(tmp, { recursive: true, force: true });
+    if (tmp) removeTempDir(tmp);
   }
 }
 
@@ -138,8 +149,10 @@ if (plan.some((k) => k !== "mediator")) {
 const started = Date.now();
 for (const kind of plan) {
   const t0 = Date.now();
-  if (kind === "mediator") buildMediator(); else await buildOne(kind);
+  if (kind === "mediator") await buildMediator(); else await buildOne(kind);
   console.log(`${kind}: built in ${formatElapsed(Date.now() - t0)} (estimate ${BUILD_ESTIMATE[kind]})`);
 }
 if (plan.length > 1) console.log(`all ${plan.length} images built in ${formatElapsed(Date.now() - started)}.`);
 if (which === "needed" && plan.length) console.log("\nNext: npm run doctor, then npm run up.");
+const superseded = supersededHintNow();
+if (superseded) console.log(`\n${superseded}`);

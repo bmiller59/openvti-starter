@@ -10,6 +10,7 @@
 import "./lib/cli.js";
 import { spawnSync } from "node:child_process";
 import { gateSteps, parseImagesChoice, pullBlockers, resolveImagesSource, runGate, summarize, teardownStep, verifiedLogLine, type GateStep } from "./lib/pins-verify.js";
+import { supersededHintNow } from "./lib/clean-real.js";
 import { pins } from "./pins.js";
 
 const argv = process.argv.slice(2);
@@ -39,3 +40,5 @@ run(teardownStep());
 console.log("\n" + summarize(results));
 if (!passed) { console.error("\nGate FAILED: do not log this pin change as verified."); process.exit(1); }
 console.log(`\nGate passed. Paste into PINS_LOG.md:\n\n${verifiedLogLine(pins(), new Date().toISOString().slice(0, 10), source)}\n`);
+const superseded = supersededHintNow();
+if (superseded) console.log(`Tip after a pin bump: ${superseded}`);
