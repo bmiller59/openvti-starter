@@ -56,7 +56,7 @@ test("specs: names and tags come from the existing pins, tag is the short ref", 
 });
 
 test("specs: a recorded digest wins for pulling; a malformed one is rejected", () => {
-  const s = imageSpecs(withDigest({ vta: D }));
+  const s = imageSpecs(withDigest({ vta: D, vtc: null }));
   assert.equal(s.vta.pinned, `${s.vta.repo}@${D}`);
   assert.equal(s.vtc.pinned, s.vtc.tagged);
   assert.throws(() => imageSpecs(withDigest({ vta: "sha256:abc" })), /images\.vta\.digest/);
@@ -216,12 +216,13 @@ test("pins:check rows: labels, features, digest", () => {
 });
 
 test("pins:check rows: a registry image without labels is drift, a local one only info; no digest recorded is info", () => {
-  const s = imageSpecs(pins());
-  assert.deepEqual(checkImageLabels(s.vtc, pins(), "r", "registry", {}, []).map((r) => r.ok), [false, null]);
-  assert.deepEqual(checkImageLabels(s.vtc, pins(), "vtc-buildathon:local", "local", {}, []).map((r) => r.ok), [null]);
-  const m = checkImageLabels(s.mediator, pins(), "m", "registry", { "org.buildathon.mediator-ref": pins().messaging.mediator.ref }, []);
+  const b = bare(); // the real pins.json records digests; this row is about the case where none is recorded
+  const s = imageSpecs(b);
+  assert.deepEqual(checkImageLabels(s.vtc, b, "r", "registry", {}, []).map((r) => r.ok), [false, null]);
+  assert.deepEqual(checkImageLabels(s.vtc, b, "vtc-buildathon:local", "local", {}, []).map((r) => r.ok), [null]);
+  const m = checkImageLabels(s.mediator, b, "m", "registry", { "org.buildathon.mediator-ref": b.messaging.mediator.ref }, []);
   assert.deepEqual(m.map((r) => r.ok), [true, null]);
-  const vtaLocal = checkImageLabels(s.vta, pins(), "vta-buildathon:local", "local", {}, []);
+  const vtaLocal = checkImageLabels(s.vta, b, "vta-buildathon:local", "local", {}, []);
   assert.deepEqual(vtaLocal.map((r) => r.ok), [null, null]);
 });
 
@@ -267,12 +268,12 @@ test("pullTarget: a recorded digest is always pulled by digest; --by-digest refu
 
 // --- images.available (pins.json): the single switch --------------------------------------------------------
 
-test("pins.json: images.available is a boolean, currently false, with a one-line why", () => {
+test("pins.json: images.available is a boolean (true since the verified 2026-11-20 publish) with a one-line why", () => {
   const i = pins().images;
   assert.equal(typeof i.available, "boolean");
-  assert.equal(i.available, false, "the organisation does not allow public packages; flip only when that changes");
+  assert.equal(i.available, true, "the images are public and images:verify passed; flip to false only to force local builds");
   assert.ok(i.why.length > 20 && !i.why.includes("\n"));
-  assert.equal(imagesAvailable(pins()), false);
+  assert.equal(imagesAvailable(pins()), true);
 });
 
 test("available=false: auto behaves like local, never pulls, never names a registry tag", () => {
@@ -322,6 +323,7 @@ test("available=true restores today's behaviour exactly", () => {
 
 test("imageStatus and useImages follow pins.json images.available", () => {
   const p = pins();
+  p.images.available = false; // the real pins.json says true; this test walks false -> true
   const s = imageSpecs(p);
   const rows = imageStatus(s, fake([s.vta.pinned]).d, "auto", ["vta", "vtc"], {}, false);
   assert.deepEqual(rows.map((r) => r.state), ["missing", "missing"], "never 'pullable' while unavailable");

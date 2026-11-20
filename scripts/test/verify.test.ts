@@ -137,7 +137,7 @@ test("offline or not logged in is SKIPPED (could not check), not FAIL and not PA
 });
 
 test("no digest in pins.json: the digest check is SKIPPED loudly, a pulled copy's digest is checked but not vouched for", () => {
-  const p = pins();
+  const p = withDigest("vtc", null); // the real pins.json records digests; this is the no-digest case
   assert.equal(p.images.vtc.digest, null);
   const spec = imageSpecs(p).vtc;
   const rep = run("vtc", p, { image: { labels: goodLabels("vtc", p), repoDigests: [`${spec.repo}@${D}`] } });
@@ -231,7 +231,7 @@ test("images:compare: provenance labels must agree, the ID may differ and that i
 });
 
 test("a registry-named image that was only retagged locally is called out, in verify and in compare", () => {
-  const p = pins();
+  const p = withDigest("vtc", null);
   const rep = run("vtc", p, { image: { labels: goodLabels("vtc", p), repoDigests: [] } });
   assert.match(get(rep, "digest").map((l) => l.detail).join(" "), /retag of a local build/);
   const labels = { "org.buildathon.pinned-ref": "r" };

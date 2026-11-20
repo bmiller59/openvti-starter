@@ -45,8 +45,8 @@
     "note": "Advance only deliberately via docs/PINS.md. The mediator is open-ACL in this kit by design (docs/MODES.md)."
   },
   "images": {
-    "available": false,
-    "why": "The organisation does not allow public GHCR packages, so participants cannot pull prebuilt images; everyone builds locally (npm run images:build). Set true only when the packages are public (or a registry everyone can pull from is configured).",
+    "available": true,
+    "why": "The packages under ghcr.io/bmiller59 are public and were published by images.yml on 2026-11-20 (see PINS_LOG.md), so participants can pull prebuilt images (npm run images:pull); building locally (npm run images:build) remains the fallback. Set true only when the packages are public and npm run images:verify passes.",
     "registry": "ghcr.io/bmiller59",
     "platforms": ["linux/amd64", "linux/arm64"],
     "note": "Prebuilt images published by .github/workflows/images.yml to <registry>/<image>:<short ref> (the image names and refs are the vti/messaging pins above). `digest` is the multi-arch index digest (sha256:...) that the workflow reports after a run; null means not published yet (or not recorded), and then the tag is used and `pins:check` says so. Paste the digests in, commit, and `images:pull` / `up` pull by digest. Procedure: docs/IMAGES.md.",
@@ -54,11 +54,11 @@
       "repo": "bmiller59/openvti-starter",
       "workflow": ".github/workflows/images.yml",
       "issuer": "https://token.actions.githubusercontent.com",
-      "note": "Who must have built and signed the published images: this repository's images workflow, via GitHub OIDC. `npm run images:verify` checks exactly this (GitHub attestation and cosign signature). A fork that publishes its own images sets IMAGE_REGISTRY and VERIFY_REPO. UNVERIFIED until the workflow has run: docs/VERIFY.md."
+      "note": "Who must have built and signed the published images: this repository's images workflow, via GitHub OIDC. `npm run images:verify` checks exactly this (GitHub attestation and cosign signature). A fork that publishes its own images sets IMAGE_REGISTRY and VERIFY_REPO. The workflow's first real runs were on 2026-11-20 (PINS_LOG.md); what images:verify reported is recorded in docs/VERIFY.md."
     },
-    "vta": { "digest": "sha256:371f1a9d528e634cc6d02cd95fc18ca277d4e2aff11c485cc3646253777c2029" },
-    "vtc": { "digest": null },
-    "mediator": { "digest": null }
+    "vta": { "digest": "sha256:16deba5b65a2b1722b9ea4f02ea2b49649d05353e2cee6cdcdbd23716fe80efa" },
+    "vtc": { "digest": "sha256:aa4a7870ed75cd5822ff63c2ee213b5c2a35a4d1fa17233e4272865dc70deac9" },
+    "mediator": { "digest": "sha256:2e916d1801a678717d8168495eb9ed4a4f955d26f1eb004eae8b05f3787fdc2f" }
   },
   "farm": {
     "observedOn": "2026-10-29T18:38Z",
