@@ -18,3 +18,4 @@ dist/
 apps/*
 !apps/README.md
 .images/
+*.tar

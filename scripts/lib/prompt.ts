@@ -13,3 +13,14 @@ export async function confirm(question: string): Promise<boolean> {
     rl.close();
   }
 }
+
+/** Ask the user to type `expected` exactly (for deletions that `y` is too easy for). Without a terminal the answer is `no`. */
+export async function typed(question: string, expected: string): Promise<boolean> {
+  if (!interactive()) return false;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return (await rl.question(`${question} Type "${expected}" to confirm: `)).trim() === expected;
+  } finally {
+    rl.close();
+  }
+}

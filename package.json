@@ -66,6 +66,8 @@
     "images:import": "tsx scripts/images-share.ts import",
     "images:verify": "tsx scripts/images-verify.ts",
     "images:compare": "tsx scripts/images-compare.ts",
+    "clean": "tsx scripts/clean.ts",
+    "clean:dry": "tsx scripts/clean.ts --dry-run",
     "check:generic": "tsx scripts/check-generic.ts",
     "check:docs": "tsx scripts/check-docs.ts",
     "test:roles": "tsx scripts/test-roles.ts",
