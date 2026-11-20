@@ -119,6 +119,10 @@ Then, by hand:
 3. Review the diff, commit (pin change, log line and doc changes together).
 4. Rebuild and republish the images: run the `images` workflow and record the new digests in `pins.json` ([IMAGES.md](IMAGES.md), [EVENT.md](EVENT.md)). Until a digest is recorded, `pins:check` says so.
 
+## Reclaiming disk after a bump
+
+Each pin bump builds new images and leaves the old ones (about 180-200 MB each) beside them, plus the BuildKit cache (about 12 GB observed). After `pins:update` and `pins:verify` (which prints a "N superseded images" hint when there are any), run `npm run clean` to see them and `npm run clean -- images --apply` to remove the superseded images; the pinned tag and `:local` stay. Clearing the build cache makes the next build cold (about 25-40 minutes per image), so it is not part of a routine clean. All scopes and sizes: [IMAGES.md](IMAGES.md#reclaiming-disk).
+
 ## The gate in CI
 
 `.github/workflows/pins-gate.yml` runs `npm run pins:verify` on every pull request that changes `pins.json`, `docker/**`, `docker-compose.yml`, `scripts/pins-*.ts`, `scripts/lib/pins-*.ts` or the workflow itself (and on demand, `workflow_dispatch`). A pin bump therefore cannot merge without e2e proof once the check is required. Status: written and statically checked, never run on GitHub; the first run is the real test.

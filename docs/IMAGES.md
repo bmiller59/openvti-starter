@@ -69,6 +69,31 @@ the script's `save -o` then `import` on a tiny scratch image (the image ID and l
 that matter: the CPU architecture must match (import warns when it does not; an amd64 tar will not run natively on Apple silicon), and the tar is **unsigned**, so it is exactly as
 trustworthy as whoever made it ([VERIFY.md](VERIFY.md)). By hand the same thing is `docker save vta-buildathon:local vtc-buildathon:local | gzip > images.tar.gz` and `zcat images.tar.gz | docker load`.
 
+## Reclaiming disk
+
+Local builds leave things behind. `npm run clean` lists them and, only with `--apply`, removes them. It is a dry run by default, prints every item with its size and a total per scope and overall, and never touches a running container's image, `:local`, the pinned tag, or anything it did not create.
+
+| What | Typical size | Scope |
+|---|---|---|
+| BuildKit cache of the resource-limited builders (`buildathon2-*`) | about 12 GB observed | `cache` |
+| Each superseded image (`vta`/`vtc`/`mediator-buildathon:<old 8-hex tag>`) | about 180-200 MB | `images` |
+| Each orphan source export `vti-XXXXXX` in `$TMPDIR` or `/tmp` (an interrupted build; `images:build` now removes its own on Ctrl-C and SIGTERM) | about 70 MB | `source` |
+| The VTI clone `../verifiable-trust-infrastructure` | about 0.9 GB | `checkout` |
+| `buildathon-images.tar` from `images:export` | 0.4 GB and up | `tars` |
+
+```sh
+npm run clean                       # dry run of images, cache, source
+npm run clean -- --apply            # remove them (asks in a terminal; --yes skips the question)
+npm run clean -- images --apply     # only the superseded images
+npm run clean -- tars --path ~/Downloads --apply
+npm run clean -- stack              # what `npm run reset` does (deletes keys): named explicitly, asks first
+npm run clean -- checkout --include-checkout   # deletes the VTI clone; you type its directory name; refused if it has local work
+```
+
+**The cache is the expensive one to lose.** After the `cache` scope removes a builder or its cache (`--prune-current`, `--remove-current`), the next `images:build` is cold: expect about **25-40 minutes per image**. By default the builder your next build would use is kept (if your current settings name a builder that does not exist yet, the most recently used one counts as current) and only the others go. `images:build` prints "N superseded images, X MB reclaimable" when old images exist.
+
+Volumes of other checkouts (`<other-dir>_vta-data` and the like) are listed, never removed; the output gives the `docker volume rm` command to run by hand once you have checked nothing uses them. Without a terminal (CI, a pipe) nothing is asked: `--apply` then needs `--yes`, and the checkout is never deleted.
+
 ## The registry design (for later)
 
 Everything below is how prebuilt images are meant to work once `images.available` is `true`. Until then it is not a path you can use unless you are an organisation member with access.
