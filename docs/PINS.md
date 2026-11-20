@@ -10,20 +10,19 @@ participant's or organiser's rebuild silently changes the wire behaviour.
 ```sh
 npm run setup                        # build the images your mode needs and that are missing (= images:build needed); the usual first command
 npm run images:build [vta|vtc|mediator|all]   # build each image from its own pinned ref; tags <image>:<short-sha> and :local (`all` = vta + vtc; the mediator is for MODE=tunnel only)
-npm run images:pull [vta|vtc|mediator|all]   # prebuilt images are NOT available yet (pins.json images.available is false): explains and pulls nothing; IMAGES=registry for members with access
+npm run images:pull [vta|vtc|mediator|all]   # the prebuilt, signed images from ghcr.io/bmiller59, by the digest in pins.json (images.available is true)
 npm run images:verify [-- vta|vtc|mediator|all]   # is it the pinned, signed image? see VERIFY.md
 npm run pins:check [-- --strict]     # report drift; changes nothing
 ```
 
-**Build locally; prebuilt images are not yet available.** `pins.json` `images.available` is `false` (the organisation does not allow public packages), so `npm run up`
-uses the `<name>:local` images you built and never pulls ([IMAGES.md](IMAGES.md)). `pins.json` `images` still holds the registry, the platforms and, for later, each image's digest;
-the registry tag would be the first 8 characters of the pinned ref. The commands below are the path everyone takes today.
+**Pull first; build locally as the fallback.** `pins.json` `images.available` is `true`: the images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
+The registry tag is the first 8 characters of the pinned ref. Building locally (the commands below) remains supported, for an unsupported CPU architecture, no network, or a pin that has not been published yet.
 
 `images:build` exports each pinned ref from a VTI checkout (`VTI_PATH`, default
 `../verifiable-trust-infrastructure`) with `git archive`, so whatever is checked out
 there is irrelevant. `VTI_LOCAL=1` builds that checkout's working tree instead (for
 development; tagged `:local` only). Images carry the label `org.buildathon.vti-ref`.
-**Digests.** They matter only for prebuilt images, which are not available yet, so `pins:check` says "not in use" instead of warning. If `images.available` is flipped to `true` and a digest is `null`, an image is pulled by a movable tag and `pins:check` prints a `WARN`. After a workflow run, record the digests, and `images:verify` can check them against the signature ([VERIFY.md](VERIFY.md)).
+**Digests.** They are in use now (`images.available` is `true`): `images:pull` and `up` pull by digest, and `pins:check` compares a pulled copy's digest and labels with the pin. If a digest is `null` (a pin advance that has not been published yet), the image is pulled by a movable tag and `pins:check` prints a `WARN`. After a workflow run, record the digests, and `images:verify` can check them against the signature ([VERIFY.md](VERIFY.md)).
 
 `pins:check` compares, per image, the label, the binary's own `--version`, that the release tag still resolves to the pinned ref, a running VTC's
 `/health` version, the lockfile against `pins.json`, and the newest upstream
@@ -31,10 +30,8 @@ development; tagged `:local` only). Images carry the label `org.buildathon.vti-r
 
 ## Where the images come from
 
-**Current decision: build locally; prebuilt images are not yet available.** The organisation does not allow public GHCR packages, so participants cannot pull images and everyone builds their own
-(`npm run setup`). `pins.json` `images.available` (`false`, with a one-line `why`) is the single switch: while it is `false`, `IMAGES=auto` means local and nothing is pulled. The publish workflow
-(`.github/workflows/images.yml`; a real run on 2026-10-30 built and pushed the mediator to the old organisation registry with attest and sign succeeding, and dry runs of the VTA and VTC passed on 2026-11-20), the signing and verification tooling and the digest fields stay for later, for organisation members (`IMAGES=registry`, after `docker login`) or if
-packages can ever be public ([IMAGES.md](IMAGES.md)). This is the one place that says so; the other docs link here, so if the status changes, change this section, the `images.available` switch and the `Prerequisites` bullet in the README.
+**Current decision: pull the prebuilt images; build locally as the fallback.** The images are published at `ghcr.io/bmiller59` (public). `pins.json` `images.available` (`true`, with a one-line `why`) is the single switch: while it is `true`, `IMAGES=auto` uses the pinned registry image if present, else a local build, else pulls it by digest; set to `false`, `IMAGES=auto` means local and nothing is pulled.
+The publish workflow (`.github/workflows/images.yml`; real push runs on 2026-11-20 built and pushed all three images with attest and sign succeeding; [PINS_LOG.md](../PINS_LOG.md)), the verification tooling (`npm run images:verify`) and the digest fields are in use. After advancing a pin, re-run the workflow, record the new digests, and run `images:verify`; until then the new pin has no prebuilt image and everyone builds it locally ([IMAGES.md](IMAGES.md)). This is the one place that says so; the other docs link here, so if the status changes, change this section, the `images.available` switch and the `Prerequisites` bullet in the README.
 
 The local-build cold path, exactly (Linux, 12 cores, Docker; the times below were measured on a 12-core desktop; requirements and laptop estimates are in [IMAGES.md](IMAGES.md#build-requirements)):
 

@@ -1,14 +1,13 @@
-# Images: build locally; prebuilt images are not available yet
+# Images: pull the prebuilt ones, or build locally
 
 Part of the [docs index](README.md). Pins and drift checks: [PINS.md](PINS.md).
 
-> **Current state, plainly.** The organisation does not allow public GHCR packages, so participants **cannot pull prebuilt images**.
-> Everyone builds their own images on their own machine. That is the default and the only generally supported path today.
-> The switch is one line in `pins.json`: `images.available` (currently `false`, with a one-line `why`). While it is `false`,
-> `IMAGES=auto` behaves like `IMAGES=local`: the kit uses `<name>:local`, never attempts a network pull and never defaults to a `ghcr.io` tag.
-> The publish workflow, the signing and verification tooling and the digests in `pins.json` stay in the repository for later (organisation
-> members who have access, or the day packages can be public). They are not the default path and nothing here should be read as saying
-> prebuilt images exist for you.
+> **Current state, plainly.** Prebuilt, multi-arch (amd64 and arm64) images of the VTA, VTC and mediator are published at `ghcr.io/bmiller59`
+> (`vta-buildathon`, `vtc-buildathon`, `mediator-buildathon`), built by this repository's images workflow (real runs of 2026-11-20, [PINS_LOG.md](../PINS_LOG.md)).
+> The packages are public and were observed to pull anonymously, and `npm run images:verify` reported VERIFIED for all three (details in [VERIFY.md](VERIFY.md)).
+> `pins.json` `images.available` is `true` and records each image's index digest, so **the default path is to pull**: `npm run images:pull`, then `npm run up`.
+> **Building locally stays supported** as the fallback (`npm run setup`; for an unsupported architecture, no network, or to see the build) and is the only path for a pin that has not been published yet.
+> Setting `images.available` back to `false` makes `IMAGES=auto` behave like `IMAGES=local` again (use `<name>:local`, never pull).
 
 The VTA, VTC and mediator images are Rust release builds. They are heavy once and cheap afterwards: each image is built once, later builds reuse Docker's layer cache, and after that `npm run up` starts in seconds.
 The numbers are in one place, [Build requirements](#build-requirements); the other docs link here.
@@ -39,7 +38,7 @@ This is the single source of truth for what a local build needs. Other documents
 1. **Import images built on a stronger machine** of the same CPU architecture: `npm run images:import -- buildathon-images.tar` ([Sharing images you built](#sharing-images-you-built)).
 2. **`RUNTIME=binary` with `MODE=local`**: run the VTA and VTC as host binaries you already have, no Docker build ([BINARIES.md](BINARIES.md)).
 3. **`MODE=farm`**: use a hosted VTA, nothing runs locally ([FARM.md](FARM.md)).
-4. **Prebuilt images**, once they are published and `images.available` is `true` ([PINS.md](PINS.md#where-the-images-come-from)). Not available today.
+4. **Prebuilt images**: `npm run images:pull` (published, public and `images.available` is `true`; [PINS.md](PINS.md#where-the-images-come-from)). A pull is a few hundred MB, not a Rust build, so on a small machine try this first.
 
 **GitHub-hosted runners.** `images.yml` and `pins-gate.yml` run on `ubuntu-24.04` (and `ubuntu-24.04-arm`). Per GitHub's documentation, a standard runner in a **public** repository has 4 vCPU, 16 GB RAM and 14 GB SSD; in a **private** repository it has 2 vCPU and 8 GB. These workflows assume the repository is public. Disk is freed and 16 GB of swap is added before building.
 
@@ -65,22 +64,21 @@ To get images without building them yourself, a colleague with the same CPU arch
 `npm run up` decides per image, in this order (`scripts/lib/images.ts`):
 
 1. `VTA_IMAGE` / `VTC_IMAGE` / `MEDIATOR_IMAGE` set: that exact image, nothing else is tried.
-2. `IMAGES=local`, **or `IMAGES` unset/`auto` while `images.available` is `false` (today)**: only the locally built `<name>:local`. Never touches the network.
-3. `IMAGES=auto` once `images.available` is `true`: the pinned registry image if it is already here, else a local build if you have one, else it **pulls** the pinned registry image.
-4. `IMAGES=registry`: the pinned registry image only (pulled if absent), no fallback to a local build. Works even while `images.available` is `false`, for people whose account
-   can pull the organisation's packages (`docker login ghcr.io` first); it says that the images are not generally available.
+2. `IMAGES=local`, **or `IMAGES` unset/`auto` while `images.available` is `false`**: only the locally built `<name>:local`. Never touches the network.
+3. `IMAGES=auto` while `images.available` is `true` (**today**): the pinned registry image if it is already here, else a local build if you have one, else it **pulls** the pinned registry image (by digest).
+4. `IMAGES=registry`: the pinned registry image only (pulled if absent), no fallback to a local build. It also works while `images.available` is `false` (for a fork's or a private registry; `docker login ghcr.io` first if it needs one).
 
 | Variable | Effect |
 |---|---|
-| `IMAGES=local` | Only locally built images. Today this is what `auto` means anyway. |
-| `IMAGES=registry` | Insist on the registry images. For organisation members with access; not generally available. |
+| `IMAGES=local` | Only locally built images; never touches the network. |
+| `IMAGES=registry` | Insist on the registry images (no fallback to a local build). |
 | `IMAGE_REGISTRY=host/org` | Pull from another registry or org (a mirror, a fork's packages, a local `registry:2`). Default: `pins.json` `images.registry`. |
 | `VTA_IMAGE`, `VTC_IMAGE`, `MEDIATOR_IMAGE` | An exact image (for example one loaded with `docker load`). |
 
 These can go in `.env` or the shell. `npm run reset` removes only the keys the kit wrote to `.env`, so your own lines stay.
 Bare `docker compose up` (without `npm run up`) knows nothing of the registry and uses `<name>:local`; use `npm run up`.
 
-`npm run images:pull` while images are unavailable prints an explanation and pulls nothing (add `IMAGES=registry` if you have access).
+`npm run images:pull` pulls the pinned images by digest (`-- --by-digest` refuses anything but the pinned digest). While `images.available` is `false` it prints an explanation and pulls nothing unless `IMAGES=registry` is set.
 `npm run images:pull -- --check` shows, without any network, what is present.
 
 ### Sharing images you built
@@ -123,9 +121,9 @@ npm run clean -- checkout --include-checkout   # deletes the VTI clone; you type
 
 Volumes of other checkouts (`<other-dir>_vta-data` and the like) are listed, never removed; the output gives the `docker volume rm` command to run by hand once you have checked nothing uses them. Without a terminal (CI, a pipe) nothing is asked: `--apply` then needs `--yes`, and the checkout is never deleted.
 
-## The registry design (for later)
+## The registry design
 
-Everything below is how prebuilt images are meant to work once `images.available` is `true`. Until then it is not a path you can use unless you are an organisation member with access.
+Everything below is how the prebuilt images work now that `images.available` is `true`.
 
 ### Where the names come from (registry images)
 
@@ -137,8 +135,8 @@ Everything below is how prebuilt images are meant to work once `images.available
 | VTC | `vtc-buildathon` | `vti.vtc.ref` | `ghcr.io/bmiller59/vtc-buildathon:26d0da81` |
 | mediator | `mediator-buildathon` | `messaging.mediator.ref` | `ghcr.io/bmiller59/mediator-buildathon:e6e2c636` |
 
-`pins.json` `images.<kind>.digest` (initially `null`) is the multi-arch index digest. Once recorded, `images:pull` and `up` pull by
-digest (`<registry>/<name>@sha256:...`), so a moved tag cannot change what runs. Until it is recorded they pull by tag and
+`pins.json` `images.<kind>.digest` is the multi-arch index digest, recorded on 2026-11-20 from the first real publish runs (and checked against the live registry). `images:pull` and `up` pull by
+digest (`<registry>/<name>@sha256:...`), so a moved tag cannot change what runs. A pin advance that has no recorded digest yet (`null`) pulls by tag and
 `pins:check` warns "no digest in pins.json" (`images:pull -- --by-digest` refuses the tag fallback).
 
 ### Checks
@@ -155,11 +153,11 @@ per image `ready | pullable | missing` with a fix command, and pulls nothing.
 
 ### Checking the images
 
-Pulling is not trusting. `npm run images:verify` checks a pulled image against `pins.json` and the workflow's signature and attestations, and `npm run images:pull -- --by-digest` pulls only by the pinned digest. How, and what that does and does not prove: [VERIFY.md](VERIFY.md). The workflow attaches an SBOM, a build provenance attestation and a keyless cosign signature (jobs `attest` and `sign`); a real run on 2026-10-30 (mediator, pushed to the old organisation registry) had both succeed, and VTA and VTC dry runs passed on 2026-11-20, but `images:verify` against that output and a run against the current registry are still unverified.
+Pulling is not trusting. `npm run images:verify` checks a pulled image against `pins.json` and the workflow's signature and attestations, and `npm run images:pull -- --by-digest` pulls only by the pinned digest. How, and what that does and does not prove: [VERIFY.md](VERIFY.md). The workflow attaches an SBOM, a build provenance attestation and a keyless cosign signature (jobs `attest` and `sign`); the real push runs of 2026-11-20 against `ghcr.io/bmiller59` had both succeed, and `images:verify` then reported VERIFIED for all three (digest, GitHub attestation naming this repository's `images.yml`, labels, SBOM). The `cosign` signature check was SKIPPED on that machine because `cosign` was not installed (the attestation covers the signature there); install `cosign` to run it too.
 
-## What an organiser does: publishing (only when packages can be public, or for members)
+## What an organiser does: publishing
 
-**The current blocker is organisational, not technical:** the organisation does not allow public GHCR packages. Publishing the images (and the signatures and digests that go with them) is therefore not something participants can use today. Running the workflow is still useful for organisation members and for the day the policy changes; when it does, set `images.available` to `true` in `pins.json`, record the digests, and run the checks in step 7 below.
+The first real publish runs were on 2026-11-20 (VTA run 44825863735, VTC run 44827253709, mediator run 44827602054; digests in [PINS_LOG.md](../PINS_LOG.md)); the packages are public under the `bmiller59` account. Publishing is only needed again after a pin advances or a fork wants its own images: run the workflow, record the new digests in `pins.json`, run `images:verify`, then commit.
 
 Publishing happens in GitHub Actions with the built-in `GITHUB_TOKEN` (`packages: write`). No personal token is involved, and no
 credential is stored in this repository. (A personal token needs the `write:packages` scope; the `gh` token on the organiser's
@@ -168,10 +166,8 @@ route is preferred because the images are then built from a clean checkout, labe
 
 ### First run
 
-1. **Check the org allows it.** Org owners: Organisation settings > Packages > "Package creation": members must be allowed to create
-   **public** packages (and the org's plan matters little: public packages on GHCR are free of charge; the repository is public). Without
-   this, the first push fails with a permission error and an owner can create the package or change the setting. This is **unverified**
-   for this org.
+1. **Check the owner allows public packages.** For an organisation: Organisation settings > Packages > "Package creation" must allow **public** packages (public packages on GHCR are free of charge; the repository is public). Without
+   this, the first push fails with a permission error. (An organisation that disallows public packages is why the first images were published under a personal account's registry, `ghcr.io/bmiller59`.) A fork under another owner sets `IMAGE_REGISTRY` and `VERIFY_REPO`.
 2. **Actions must be enabled** for the repository, and workflows may need "Read and write permissions" under Settings > Actions > General >
    Workflow permissions (the workflow requests `packages: write` itself, but an org policy can cap it).
 3. **Dry run first.** Actions > images > Run workflow, `images` = `vta` (the quickest to learn from), `push` = **false**. This builds on the
@@ -204,7 +200,7 @@ open-ACL by design and the VTA stores a plaintext seed ([MODES.md](MODES.md), [S
 | arm64 jobs wait for ever | The `ubuntu-24.04-arm` runner is not available to the organisation. See the QEMU fallback in the workflow comments (hours, not minutes), or publish amd64 only. |
 | A build leg is cancelled at its timeout | The runner was slower than the estimate. Raise `timeout` in the plan step, and record the real time in this file. |
 | `fetch ... origin <sha>` fails in the VTA or VTC leg | The pinned commit is not reachable from the upstream repository (force-pushed or deleted). Re-pin ([PINS.md](PINS.md)). |
-| `pull access denied` for a participant | Expected today: the packages are private and the organisation does not allow public ones. Build locally (`npm run setup`). If `images.available` is true: the package is still private (step 5), or `IMAGE_REGISTRY` points elsewhere. |
+| `pull access denied` for a participant | A stale `docker login ghcr.io` token (`docker logout ghcr.io`), the package was made private again (step 5), or `IMAGE_REGISTRY` points elsewhere. Build locally as a fallback (`npm run setup`). |
 | `no matching manifest for linux/...` | A CPU architecture that was not built (only amd64 and arm64 are). |
 | `pins:check` reports a digest drift | The registry tag moved or the local copy is old: `npm run images:pull -- vta --force`. |
 
@@ -223,6 +219,6 @@ Verified here (no network, no registry):
 - `npm run images:pull` against an unreachable registry fails with the friendly message and the local build named; `npm run up` with
   local images starts a working VTA and `npm run hello` passes.
 
-**Not verified:** a run against the current organisation registry (a real run on 2026-10-30 pushed the mediator to the old one with `attest` and `sign` succeeding, and VTA and VTC dry runs passed on 2026-11-20); that the output of those jobs (`anchore/sbom-action`, `actions/attest-*` and `cosign` against GHCR) passes verification, and that `gh attestation verify` / `cosign verify` accept the result with the identity `images:verify` expects); that the actions' pinned versions behave as written; that the arm64 images
-build, start and work; build times of the mediator and arm64 legs on the runners (VTA and VTC legs measured at about 26 to 29 minutes); that the org permits package creation; that a participant can pull anonymously; the
-digest flow end to end; `actionlint` was not available, so only the YAML parse and a shell syntax check stood in for it.
+**Verified live on 2026-11-20 (the real publish runs):** the workflow's `attest` and `sign` jobs succeeded for all three images; the index digests in the job logs equal the live registry manifests; `gh attestation verify` (through `images:verify`) accepts each image with the identity `bmiller59/openvti-starter/.github/workflows/images.yml`; digest, label and SBOM checks pass on a pulled amd64 copy; the packages pull anonymously (observed by another agent with an empty Docker config); `images:pull -- --by-digest` pulls the pinned digest.
+
+**Not verified:** the `cosign verify` path (`cosign` was not installed, so that check was SKIPPED; the attestation covers the signature); that the arm64 images start and work (they were built and indexed but only amd64 was run); a full `pins:verify` gate (pull, `up`, `e2e`) against the pulled images; build times of the mediator and arm64 legs on the runners (VTA and VTC legs measured at about 26 to 29 minutes); that the actions' pinned versions behave as written beyond these runs; `actionlint` was not available, so only the YAML parse and a shell syntax check stood in for it.

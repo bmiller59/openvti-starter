@@ -24,7 +24,7 @@ admin private key; the VTC logs an install URL with a token).
 
 ## Is this the image you think it is?
 
-Images can be checked: digest against `pins.json`, a GitHub attestation and cosign signature from this repository's workflow, labels, an SBOM, or a local build compared with the published one. What the signature proves and does not (the mediator is open-ACL and these are dev images either way): [VERIFY.md](VERIFY.md). The signing steps are unverified until the workflow has run.
+Images can be checked: digest against `pins.json`, a GitHub attestation and cosign signature from this repository's workflow, labels, an SBOM, or a local build compared with the published one. What the signature proves and does not (the mediator is open-ACL and these are dev images either way): [VERIFY.md](VERIFY.md). The workflow's attest and sign steps ran for real on 2026-11-20 and `images:verify` passed (the cosign check itself was not run; VERIFY.md).
 
 ## Whose DID is this? (trust in did.jsonl)
 

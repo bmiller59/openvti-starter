@@ -4,7 +4,7 @@
 //   npm run setup [-- --tunnel] [--no-vtc]   = images:build needed: builds only what the mode needs and is not built yet
 //                                (local: vta + vtc; --tunnel / MODE=tunnel: + mediator; --no-vtc / WITH_VTC=0 leaves the VTC out),
 //                                one after the other, with the time each took and a memory warning up front. Prebuilt images are
-//                                not available yet (pins.json images.available), so this is how every machine gets its images.
+//                                published (pins.json images.available; `npm run images:pull`), so this is the fallback path.
 // VTI_PATH   a verifiable-trust-infrastructure checkout (default ../verifiable-trust-infrastructure);
 //            each pinned ref is exported with `git archive`, so its working tree is never used.
 // VTI_LOCAL=1 build the checkout's working tree instead (development; the image is tagged :local only).

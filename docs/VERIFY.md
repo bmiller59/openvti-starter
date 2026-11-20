@@ -6,30 +6,27 @@ You should not have to take our word for what is inside the images this kit runs
 free tools, that an image is the one the pins name, that it was built by this repository's published workflow, and what went into it.
 Or to skip all trust and build it yourself and compare.
 
-> **What applies now.** Prebuilt images are **not available yet** (the organisation does not allow public packages; `images.available` is `false` in `pins.json`), so what you run is an image you
-> **built yourself** (or one a colleague exported with `npm run images:export`). For those, verification is `npm run images:verify -- --local` (labels: the pinned ref, the features, the
+> **What applies now.** Prebuilt images are **published and verified** (`ghcr.io/bmiller59`, public; `images.available` is `true` in `pins.json`). Pull them with `npm run images:pull` and check them with `npm run images:verify`.
+> If you built the images yourself (or a colleague exported them with `npm run images:export`), verification is `npm run images:verify -- --local` (labels: the pinned ref, the features, the
 > Dockerfile hash; labels say what the builder wrote, not what is inside) and `npm run images:compare`; the real check is that you built it from the pinned ref, which `images:build` does with `git archive`.
-> A shared tar is as trustworthy as whoever made it. **Signed prebuilt images are future**: the rest of this page describes them for when packages can be public (or for organisation members using `IMAGES=registry`).
+> A shared tar is as trustworthy as whoever made it.
 >
-> **Status of that future path, stated plainly.** The signing steps ran once on GitHub (the real run of 2026-10-30 pushed the mediator to the old organisation registry with `attest` and `sign` succeeding; VTA and VTC dry runs passed on 2026-11-20), but no output has been checked with `images:verify`. Until it has been run
-> for the current registry, there is no signature or attestation to check, `pins.json` records no digests (apart from one VTA digest recorded after a publish run), and `npm run images:verify` will say
-> `INCOMPLETE` (published image) rather than `VERIFIED`. What is tested without GitHub: the verification logic against mocked
-> `gh`/`cosign`/`docker` output, the workflow's structure and permissions, and the label format. What is **not** yet observed: that
-> the attest and sign jobs succeed, that the real `gh attestation verify` / `cosign verify` output matches what the command
-> expects (the identity pattern and the SPDX predicate type are taken from the tools' documentation), that anyone can verify
-> anonymously once the packages are public. Treat each as **unverified** until the first real run has been checked with the commands below. The stopgap images that were pushed by hand were not built by the workflow and **will fail** the check
+> **What was observed (2026-11-20).** The first real push runs of the workflow (VTA 44825863735, VTC 44827253709, mediator 44827602054) published all three images with `attest` and `sign` succeeding. The index digests
+> in the job logs equal the live registry manifests, and `images:verify` on the pulled amd64 images printed VERIFIED for all three: digest equal to `pins.json`, `gh attestation` signed by `bmiller59/openvti-starter/.github/workflows/images.yml`,
+> labels (ref, features, `build-origin = github-actions`) and an SBOM (SPDX-2.3, 95 packages for the VTA and VTC, 107 for the mediator). **Not observed:** the `cosign verify` check (cosign was not installed there, so it was SKIPPED;
+> the attestation covers the signature), anything on arm64, and anonymous pulls by this script (another agent saw them with an empty Docker config). The stopgap images that were pushed by hand earlier were not built by the workflow and **fail** the check
 > (`label origin`), by design.
 
 ## The 60-second version
 
-For images you built (today):
+For images you built:
 
 ```sh
 npm run images:verify -- --local    # labels of your own build: ref, features, Dockerfile hash
 npm run images:compare              # only if you also have a published copy to compare with
 ```
 
-For prebuilt images (future, or `IMAGES=registry` with access):
+For the prebuilt images:
 
 ```sh
 npm run images:pull                 # fetch the pinned images (by digest once pins.json records it)
@@ -96,7 +93,7 @@ jq -r '.images.vta.digest' pins.json
 docker image inspect ghcr.io/bmiller59/vta-buildathon:26d0da81 --format '{{json .RepoDigests}}'
 
 # 2. The GitHub attestation: signed by this repository's images workflow
-DIGEST=$(jq -r '.images.vta.digest' pins.json)          # "null" until the digests are recorded
+DIGEST=$(jq -r '.images.vta.digest' pins.json)          # "null" only for a pin that has not been published yet
 gh attestation verify "oci://ghcr.io/bmiller59/vta-buildathon@$DIGEST" \
   --repo bmiller59/openvti-starter \
   --signer-workflow bmiller59/openvti-starter/.github/workflows/images.yml

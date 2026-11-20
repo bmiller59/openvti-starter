@@ -1,7 +1,8 @@
 # Publish the prebuilt container images (VTA, VTC, mediator) to GHCR. Procedure and first-run steps: docs/IMAGES.md.
 #
-# STATUS: written, statically checked (YAML parse, tests in scripts/test/images-workflow.test.ts) and run: a real run
-# succeeded on 2026-10-30, and dry runs of vta and vtc (push: false, below) passed since. Use a dry run first after any change.
+# STATUS: written, statically checked (YAML parse, tests in scripts/test/images-workflow.test.ts) and run for real: push runs
+# on 2026-11-20 published all three images to ghcr.io/bmiller59 (VTA 44825863735, VTC 44827253709, mediator 44827602054).
+# Use a dry run (push: false, below) first after any change.
 #
 # What it does
 #   plan   reads pins.json (single source of truth: refs, features, registry, platforms) and builds the matrix.
@@ -19,10 +20,10 @@
 #   digests  one artifact and a job summary with the digests, ready to paste into pins.json (images.<kind>.digest).
 #            It runs only after attest and sign succeeded, so a digest is never offered unsigned.
 #
-# Supply-chain verification (docs/VERIFY.md, `npm run images:verify`): a real push run (41130721784, 2026-10-30) built the
-# mediator 0.45.0 and pushed it to the OLD organisation registry, ghcr.io/mickens-lab, and its attest and sign jobs succeeded.
-# The VTA and VTC dry runs (push: false) passed on 2026-11-20. Not yet verified: `npm run images:verify` against that output,
-# and any run against the current registry.
+# Supply-chain verification (docs/VERIFY.md, `npm run images:verify`): the attest and sign jobs succeeded in the real push
+# runs of 2026-11-20, and `npm run images:verify` then reported VERIFIED for all three images (digest, gh attestation naming
+# this workflow, labels, SBOM). The cosign check itself was skipped there (cosign not installed); nothing was run on arm64.
+# An earlier real run (41130721784, 2026-10-30) pushed the mediator 0.45.0 to the old organisation registry.
 #
 # Triggers: manual (Actions tab > images > Run workflow) or pushing a tag named images-* (for example images-2026-11-01).
 #   Manual inputs: images (all|vta|vtc|mediator), push (false = build and smoke-test only, push nothing),

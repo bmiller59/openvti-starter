@@ -44,8 +44,9 @@ single demo or a phone experiment, and take it down afterwards.
 
 ### Two weeks before
 
-- [ ] **FIRST: plan the images. Prebuilt images are not available** (the organisation does not allow public GHCR packages, so nobody can pull them), and a Rust release build per laptop is what makes local setup slow:
+- [ ] **FIRST: plan the images. Prebuilt, signed images are published** (`ghcr.io/bmiller59`, public; `npm run images:pull` then `npm run images:verify`), so the default plan is that each participant pulls them ahead of the event over good Wi-Fi (about 200 MB per image). A Rust release build per laptop is what makes local setup slow, so building is the fallback (an unsupported CPU, no network, or a pin newer than the published images):
       plan for a cold Rust build per image (VTA, VTC and, for `MODE=tunnel` only, the mediator); disk, RAM, cores and times are in [Build requirements](IMAGES.md#build-requirements) (20 GB or more free disk, 8 GB RAM comfortable, 12 to 25 minutes per image on a 12-core desktop, an unmeasured 25 to 40 on a laptop). A realistic plan, in order of preference:
+      0. **Pull the prebuilt images** (the default): send `npm ci && npm run images:pull` a week ahead; test it once on a clean laptop and, if you have one, an arm64 machine (the arm64 images are built but not yet run). Do not have a room pull at once over venue Wi-Fi.
       1. **Build once on a fast machine, share the result.** On an organiser's machine: `npm ci && npm run setup` (add `-- --tunnel` for the mediator), then
          `npm run images:export -- buildathon-images.tar` (about 400 MB for the VTA and VTC). Put the tar on USB sticks or a local file share; each participant runs `npm ci`,
          `npm run images:import -- buildathon-images.tar`, `npm run up`. Do the full round trip on a second machine before the event (**the single-image and scratch-image round trips are verified, a full
@@ -57,8 +58,7 @@ single demo or a phone experiment, and take it down afterwards.
 - [ ] **Test the plan on a clean laptop with no images:** `npm ci`, `npm run doctor` (it should list the images to build or import), import or build, `npm run pins:check`, `npm run up`, `npm run hello`.
       Build from the pinned refs, not from whatever is checked out: `npm run images:build all` uses VTA `vta-service-v0.72.0`, VTC `vtc-service-v0.20.0` ([VTC.md](VTC.md) for times; tags
       `<image>:<short-sha>` and `:local`). `npm run pins:check` should show no drift on the image refs. Before advancing a pin, re-verify the local VTA + VTC path and the farm note ([PINS.md](PINS.md)).
-- [ ] **Later, not now: publishing prebuilt images.** If the organisation ever allows public packages, the workflow in [IMAGES.md](IMAGES.md) (a real run on 2026-10-30 built and pushed the mediator, with attest and sign succeeding, to the old organisation registry; dry runs of the VTA and VTC passed on 2026-11-20; none of it is verified for this organisation's registry) publishes signed multi-arch images; then set
-      `images.available` to `true` in `pins.json`, record the digests, and verify with [VERIFY.md](VERIFY.md). Until then none of that is on the critical path.
+- [ ] **After any pin advance: re-publish the prebuilt images.** Run the workflow in [IMAGES.md](IMAGES.md) (the first real push runs were on 2026-11-20 and were verified with `images:verify`), record the new digests in `pins.json`, and verify with [VERIFY.md](VERIFY.md). Until the new digests are recorded, participants pull by tag or build locally.
 - [ ] Locally built images match the builder's CPU only; include an arm64 machine in the clean-laptop check if participants have them.
 - [ ] Test the full checkpoint from a clean clone on Linux, macOS and Windows (WSL2).
       Only Linux was tested for this kit.

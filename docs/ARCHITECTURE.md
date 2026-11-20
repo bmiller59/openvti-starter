@@ -74,7 +74,7 @@ flowchart LR
 
 ## Pins and image build
 
-`pins.json` records the upstream release (the VTA and VTC are cut from one commit) and exact npm versions. `npm run images:build [vta|vtc|mediator|all]` builds each image from its own pinned ref of a local checkout of the upstream repository (`VTI_PATH`), tagging `<image>:<short-sha>` and `:local`, the default in compose. `npm run pins:check` reports drift. See [PINS.md](PINS.md). Building an image from source is slow (Rust), and prebuilt images are not yet available (the organisation does not allow public packages; `images.available` is `false` in `pins.json`), so each machine builds its own: `npm run setup` builds what the mode needs, and `images:export` / `images:import` copy the result between machines ([IMAGES.md](IMAGES.md)). The publish workflow, signing and digests stay in the repository for later.
+`pins.json` records the upstream release (the VTA and VTC are cut from one commit) and exact npm versions. `npm run images:build [vta|vtc|mediator|all]` builds each image from its own pinned ref of a local checkout of the upstream repository (`VTI_PATH`), tagging `<image>:<short-sha>` and `:local`, the default in compose. `npm run pins:check` reports drift. See [PINS.md](PINS.md). Building an image from source is slow (Rust), so the default is to pull the published, signed images (`npm run images:pull`; `images.available` is `true` in `pins.json`) and build locally only as the fallback: `npm run setup` builds what the mode needs, and `images:export` / `images:import` copy the result between machines ([IMAGES.md](IMAGES.md)). The publish workflow, signing and digests stay in the repository for later.
 
 ## Framework-free and React
 

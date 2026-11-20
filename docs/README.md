@@ -22,7 +22,7 @@ Back to the [repo README](../README.md). Everything here is for a local playgrou
 - [FARM.md](FARM.md): the hosted VTA Farm mode, canary and troubleshooting.
 - [PINS.md](PINS.md): pinned versions, building the images, drift checks (and [PINS_LOG.md](../PINS_LOG.md)).
 - [VERIFY.md](VERIFY.md): how to check what you run (digest, signature, SBOM, labels, building yourself and comparing), and what that does and does not prove.
-- [IMAGES.md](IMAGES.md): building the images locally (the default; prebuilt images are not yet available), sharing them with `docker save`/`load`, and how publishing would work later.
+- [IMAGES.md](IMAGES.md): pulling the prebuilt images (the default) or building them locally, sharing them with `docker save`/`load`, and how publishing works.
 
 ## Reference
 
