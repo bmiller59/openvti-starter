@@ -10,7 +10,10 @@ import {
 import { realCleanFs } from "../lib/clean-real.js";
 
 // --- fakes ------------------------------------------------------------------------------------------------------
-const pinned = [{ name: "vta-buildathon", keep: "26d0da81" }, { name: "vtc-buildathon", keep: "26d0da81" }, { name: "mediator-buildathon", keep: "e6e2c636" }];
+const pinned = [
+  { name: "vta-buildathon", keep: ["26d0da81", "0.72.0-26d0da81"] }, { name: "vtc-buildathon", keep: ["26d0da81", "0.20.0-26d0da81"] },
+  { name: "mediator-buildathon", keep: ["e6e2c636", "0.48.0-e6e2c636"] },
+];
 const img = (repo: string, tag: string, id: string, bytes = 190e6): DockerImage => ({ repo, tag, id, bytes });
 const NOW = Date.parse("2026-11-19T12:00:00Z");
 const ago = (min: number) => NOW - min * 60_000;
@@ -96,6 +99,24 @@ test("images: only <pinned name>:<8 hex> tags that are not the pinned ref are re
   const p = planImages(imgs, pinned, []);
   assert.deepEqual(p.items.map((i) => i.action), [{ kind: "image-rm", ref: "vta-buildathon:fc157f76" }, { kind: "image-rm", ref: "vtc-buildathon:93d36996" }]);
   assert.equal(p.items.reduce((s, i) => s + i.bytes, 0), 377e6);
+});
+
+test("images: both tag forms of the current pin are kept, both forms of an old pin are removable", () => {
+  const all = [
+    img("vta-buildathon", "26d0da81", "A1"), img("vta-buildathon", "0.72.0-26d0da81", "A1"), img("vta-buildathon", "local", "A1"),
+    img("vta-buildathon", "fc157f76", "B2"), img("vta-buildathon", "0.65.0-fc157f76", "B2"),
+    img("vta-buildathon", "0.71.0-26d0da81", "G7", 50e6),
+  ];
+  const p = planImages(all, pinned, []);
+  assert.deepEqual(p.items.map((i) => (i.action as { ref: string }).ref).sort(), ["vta-buildathon:0.65.0-fc157f76", "vta-buildathon:0.71.0-26d0da81", "vta-buildathon:fc157f76"]);
+  assert.equal(p.items.reduce((s, i) => s + i.bytes, 0), 190e6 + 50e6);
+  assert.ok(p.info.some((l) => l.text === "kept vta-buildathon:0.72.0-26d0da81"));
+  assert.ok(!p.items.some((i) => /0\.72\.0-26d0da81|:local|:26d0da81/.test(i.label)));
+});
+
+test("images: a version tag that is not <version>-<8 hex> is never a candidate", () => {
+  const p = planImages([img("vta-buildathon", "0.65.0-rc1", "Z1"), img("vta-buildathon", "latest", "Z2")], pinned, []);
+  assert.equal(p.items.length, 0);
 });
 
 test("images: a registry-prefixed copy of a pinned image name is recognised, a lookalike name is not", () => {

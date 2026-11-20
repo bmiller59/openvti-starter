@@ -22,14 +22,14 @@ It is for developers who want to see a signed Trust Task round trip working in m
   Disk, RAM, cores and times for the local build (20 GB or more free disk, 8 GB RAM comfortable; 12 to 25 min per image on a 12-core desktop, 25 to 40 min estimated on a laptop): [Build requirements](docs/IMAGES.md#build-requirements). `npm run doctor` checks them.
   **Low on resources?** Pull the prebuilt images, import images a colleague built on a stronger machine of the same CPU architecture (`npm run images:import`; [docs/IMAGES.md](docs/IMAGES.md#sharing-images-you-built)),
   run the VTA and VTC as host binaries you already have (`RUNTIME=binary` with `MODE=local`, [docs/BINARIES.md](docs/BINARIES.md)), or use a hosted VTA (`MODE=farm`, [docs/FARM.md](docs/FARM.md)).
-  Exact steps: [docs/PINS.md](docs/PINS.md#where-the-images-come-from). To check what you run:
+  Exact steps: [docs/PINS.md](docs/PINS.md#where-the-images-come-from); image names and tags: [docs/IMAGES.md](docs/IMAGES.md#image-names-and-tags). To check what you run:
   [docs/VERIFY.md](docs/VERIFY.md). Without Docker, see the Farm mode in [docs/MODES.md](docs/MODES.md).
 
 ## Quick start
 
 ```sh
 npm ci
-npm run images:pull          # once: the prebuilt images, by pinned digest (no build). Or, to build them yourself instead:
+npm run images:pull          # once: the prebuilt images, by pinned digest (no build), tagged <name>:<ref8> and <name>:<version>-<ref8>. Or, to build them yourself instead:
 npm run setup                #   builds the missing images (the slow part, minutes per Rust image cold; see Prerequisites)
 npm run up                   # keys, VTA + VTC, a "my-app" context and a credential in .env (WITH_VTC=0: no community)
 npm run hello                # first signed call

@@ -9,14 +9,14 @@ participant's or organiser's rebuild silently changes the wire behaviour.
 
 ```sh
 npm run setup                        # build the images your mode needs and that are missing (= images:build needed); the usual first command
-npm run images:build [vta|vtc|mediator|all]   # build each image from its own pinned ref; tags <image>:<short-sha> and :local (`all` = vta + vtc; the mediator is for MODE=tunnel only)
-npm run images:pull [vta|vtc|mediator|all]   # the prebuilt, signed images from ghcr.io/bmiller59, by the digest in pins.json (images.available is true)
+npm run images:build [vta|vtc|mediator|all]   # build each image from its own pinned ref; tags <image>:<ref8>, <image>:<version>-<ref8> and :local (`all` = vta + vtc; the mediator is for MODE=tunnel only)
+npm run images:pull [vta|vtc|mediator|all]   # the prebuilt, signed images from ghcr.io/bmiller59, by the digest in pins.json (images.available is true); then tagged locally <image>:<ref8> and <image>:<version>-<ref8>, never :local
 npm run images:verify [-- vta|vtc|mediator|all]   # is it the pinned, signed image? see VERIFY.md
 npm run pins:check [-- --strict]     # report drift; changes nothing
 ```
 
 **Pull first; build locally as the fallback.** `pins.json` `images.available` is `true`: the images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
-The registry tag is the first 8 characters of the pinned ref. Building locally (the commands below) remains supported, for an unsupported CPU architecture, no network, or a pin that has not been published yet.
+The tags come from the pin: `<ref8>` (the first 8 characters of the pinned ref) and `<version>-<ref8>`; a bump changes both ([IMAGES.md](IMAGES.md#image-names-and-tags)). Building locally (the commands below) remains supported, for an unsupported CPU architecture, no network, or a pin that has not been published yet.
 
 `images:build` exports each pinned ref from a VTI checkout (`VTI_PATH`, default
 `../verifiable-trust-infrastructure`) with `git archive`, so whatever is checked out
@@ -118,7 +118,7 @@ Then, by hand:
 
 ## Reclaiming disk after a bump
 
-Each pin bump builds new images and leaves the old ones (about 180-200 MB each) beside them, plus the BuildKit cache (about 12 GB observed). After `pins:update` and `pins:verify` (which prints a "N superseded images" hint when there are any), run `npm run clean` to see them and `npm run clean -- images --apply` to remove the superseded images; the pinned tag and `:local` stay. Clearing the build cache makes the next build cold ([times](IMAGES.md#build-requirements)), so it is not part of a routine clean. All scopes and sizes: [IMAGES.md](IMAGES.md#reclaiming-disk).
+Each pin bump builds new images and leaves the old ones (about 180-200 MB each) beside them, plus the BuildKit cache (about 12 GB observed). After `pins:update` and `pins:verify` (which prints a "N superseded images" hint when there are any), run `npm run clean` to see them and `npm run clean -- images --apply` to remove the superseded images; the current pin's two tags (`<ref8>` and `<version>-<ref8>`) and `:local` stay. Clearing the build cache makes the next build cold ([times](IMAGES.md#build-requirements)), so it is not part of a routine clean. All scopes and sizes: [IMAGES.md](IMAGES.md#reclaiming-disk).
 
 ## The gate in CI
 

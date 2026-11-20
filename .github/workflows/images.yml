@@ -23,7 +23,9 @@
 # Supply-chain verification (docs/VERIFY.md, `npm run images:verify`): the attest and sign jobs succeeded in the real push
 # runs of 2026-11-20, and `npm run images:verify` then reported VERIFIED for all three images (digest, gh attestation naming
 # this workflow, labels, SBOM). The cosign check itself was skipped there (cosign not installed); nothing was run on arm64.
-# An earlier real run (41130721784, 2026-10-30) pushed the mediator 0.45.0 to the old organisation registry.
+# An earlier real run (41130721784, 2026-10-30) pushed the mediator 0.45.0 to an earlier registry.
+# Tags: each run pushes <registry>/<name>:<ref8> and <registry>/<name>:<version>-<ref8> (the same index digest). The
+# images published on 2026-11-20 carry only the <ref8> tag; the next publish adds the version tag. There is no `latest`.
 #
 # Triggers: manual (Actions tab > images > Run workflow) or pushing a tag named images-* (for example images-2026-11-01).
 #   Manual inputs: images (all|vta|vtc|mediator), push (false = build and smoke-test only, push nothing),
@@ -41,8 +43,7 @@
 #   44663168210 took about 26 to 29 minutes per build leg with a 12g cap and 16 GB swap. The job timeouts (90 / 90 / 120 minutes)
 #   leave about 2 to 3 times that headroom, so a hung job is stopped without eating the whole 6-hour default.
 #   Build legs run in parallel, so the whole run should take about as long as the slowest leg.
-#   arm64 on the native ubuntu-24.04-arm runner is expected to be as fast as amd64. If that runner is unavailable to the
-#   organisation, the fallback is QEMU on the amd64 runner (docker/setup-qemu-action, platforms: linux/amd64,linux/arm64
+#   arm64 on the native ubuntu-24.04-arm runner is expected to be as fast as amd64. If that runner is unavailable, the fallback is QEMU on the amd64 runner (docker/setup-qemu-action, platforms: linux/amd64,linux/arm64
 #   in one job); a Rust release build under QEMU is typically 5 to 10 times slower (hours), so raise the timeouts
 #   a lot, or publish amd64 only and say so in docs/IMAGES.md.
 #   The BuildKit cache (type=gha) speeds up reruns; it counts against the repository's 10 GB cache quota and a Rust
@@ -304,6 +305,7 @@ jobs:
         env:
           REPO: ${{ matrix.repo }}
           SHORT: ${{ matrix.short }}
+          VERSION: ${{ matrix.version }}
           KIND: ${{ matrix.kind }}
           REF: ${{ matrix.ref }}
           REF_LABEL: ${{ matrix.ref_label }}
@@ -314,7 +316,9 @@ jobs:
           want=$(jq 'length' <<<"$PLATFORMS")
           have=$(ls digests | wc -l)
           [ "$have" -eq "$want" ] || { echo "::error::expected $want digests, found $have"; exit 1; }
-          docker buildx imagetools create -t "$REPO:$SHORT" $(printf "$REPO@sha256:%s " $(ls digests))
+          # Two registry tags on the one index: <ref8> and <version>-<ref8> (docs/IMAGES.md, "Image names and tags"). No `latest`.
+          # The digest is the verified reference; attest and sign subjects are the digest, never a tag.
+          docker buildx imagetools create -t "$REPO:$SHORT" -t "$REPO:$VERSION-$SHORT" $(printf "$REPO@sha256:%s " $(ls digests))
           digest=$(docker buildx imagetools inspect "$REPO:$SHORT" --format '{{json .Manifest}}' | jq -r .digest)
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::could not read the index digest"; exit 1; }
           # Both platforms must be in the index.

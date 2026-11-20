@@ -4,6 +4,7 @@
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { Pins } from "../pins.js";
 import { DEFAULT_TAR } from "./share.js";
+import { canonicalTags, isRefTag } from "./image-tags.js";
 
 export type Scope = "images" | "cache" | "source" | "tars" | "stack" | "checkout";
 export const ALL_SCOPES: readonly Scope[] = ["images", "cache", "source", "tars", "stack", "checkout"];
@@ -161,11 +162,12 @@ const merge = (into: Plan, from: Plan) => { into.items.push(...from.items); into
 
 // images ---------------------------------------------------------------------------------------------------------
 
-export interface PinnedImage { name: string; /** the 8-hex tag the pinned ref gives */ keep: string }
+/** `keep` = every tag the current pin gives the image (`<ref8>` and `<version>-<ref8>`, scripts/lib/image-tags.ts). */
+export interface PinnedImage { name: string; keep: string[] }
 export const pinnedImages = (p: Pins): PinnedImage[] => [
-  { name: p.vti.vta.image, keep: p.vti.vta.ref.slice(0, 8) },
-  { name: p.vti.vtc.image, keep: p.vti.vtc.ref.slice(0, 8) },
-  { name: p.messaging.mediator.image, keep: p.messaging.mediator.ref.slice(0, 8) },
+  { name: p.vti.vta.image, keep: canonicalTags(p.vti.vta) },
+  { name: p.vti.vtc.image, keep: canonicalTags(p.vti.vtc) },
+  { name: p.messaging.mediator.image, keep: canonicalTags(p.messaging.mediator) },
 ];
 
 /** `vta-buildathon` or `ghcr.io/org/vta-buildathon` (a pulled copy of the same image) -> the pinned entry; anything else -> undefined. */
@@ -178,13 +180,13 @@ const sameId = (a: string, b: string): boolean => {
 };
 
 /**
- * Superseded = `<pinned image name>:<8 hex>` whose tag is not the pinned ref's. `:local`, the pinned tag, other tags and other
+ * Superseded = `<pinned image name>:<8 hex>` or `:<version>-<8 hex>` whose tag is not one of the current pin's two tags. `:local`, the pinned tag, other tags and other
  * images are never candidates. An image that a kept tag (or any other tag) still points to is only untagged, so it frees nothing.
  */
 export function planImages(images: DockerImage[], pinned: PinnedImage[], running: string[]): Plan {
   const plan = emptyPlan();
   const runningSet = new Set(running);
-  const isCandidate = (i: DockerImage) => { const p = pinnedFor(i.repo, pinned); return p !== undefined && /^[0-9a-f]{8}$/.test(i.tag) && i.tag !== p.keep; };
+  const isCandidate = (i: DockerImage) => { const p = pinnedFor(i.repo, pinned); return p !== undefined && isRefTag(i.tag) && !p.keep.includes(i.tag); };
   const candidates = images.filter(isCandidate);
   for (const i of images.filter((x) => pinnedFor(x.repo, pinned) && !isCandidate(x))) plan.info.push({ scope: "images", text: `kept ${i.repo}:${i.tag}` });
   for (const i of candidates) {

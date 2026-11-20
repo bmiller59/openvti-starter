@@ -103,7 +103,7 @@ Local builds leave things behind. `npm run clean` lists them and, only with `--a
 | What | Typical size | Scope |
 |---|---|---|
 | BuildKit cache of the resource-limited builders (`buildathon2-*`) | about 12 GB observed | `cache` |
-| Each superseded image (`vta`/`vtc`/`mediator-buildathon:<old 8-hex tag>`) | about 180-200 MB | `images` |
+| Each superseded image (`vta`/`vtc`/`mediator-buildathon:<old ref8>` or `:<old version>-<ref8>`) | about 180-200 MB | `images` |
 | Each orphan source export `vti-XXXXXX` in `$TMPDIR` or `/tmp` (an interrupted build; `images:build` now removes its own on Ctrl-C and SIGTERM) | about 70 MB | `source` |
 | The VTI clone `../verifiable-trust-infrastructure` | about 0.9 GB | `checkout` |
 | `buildathon-images.tar` from `images:export` | 0.4 GB and up | `tars` |
@@ -125,15 +125,29 @@ Volumes of other checkouts (`<other-dir>_vta-data` and the like) are listed, nev
 
 Everything below is how the prebuilt images work now that `images.available` is `true`.
 
-### Where the names come from (registry images)
+### Image names and tags
 
-`pins.json` stays the single source of truth. The image is `<registry>/<name>:<first 8 characters of the pinned upstream commit>`:
+`pins.json` stays the single source of truth. Every image has two tags, both derived from its pin (one helper, `scripts/lib/image-tags.ts`, used by `images:build`, `images:pull` and `npm run clean`):
 
-| Image | Name | Tag from | Example |
-|---|---|---|---|
-| VTA | `vta-buildathon` | `vti.vta.ref` | `ghcr.io/bmiller59/vta-buildathon:26d0da81` |
-| VTC | `vtc-buildathon` | `vti.vtc.ref` | `ghcr.io/bmiller59/vtc-buildathon:26d0da81` |
-| mediator | `mediator-buildathon` | `messaging.mediator.ref` | `ghcr.io/bmiller59/mediator-buildathon:e6e2c636` |
+- `<ref8>`: the first 8 characters of the pinned upstream commit.
+- `<version>-<ref8>`: the pinned version plus that, e.g. `0.72.0-26d0da81`.
+
+There is **no `latest`**: a moving tag defeats pinning. The digest in `pins.json` is the verified reference; tags are labels for people.
+
+| Image | Name | Pin | Tags | Registry example |
+|---|---|---|---|---|
+| VTA | `vta-buildathon` | `vti.vta` (0.72.0) | `26d0da81`, `0.72.0-26d0da81` | `ghcr.io/bmiller59/vta-buildathon:0.72.0-26d0da81` |
+| VTC | `vtc-buildathon` | `vti.vtc` (0.20.0) | `26d0da81`, `0.20.0-26d0da81` | `ghcr.io/bmiller59/vtc-buildathon:0.20.0-26d0da81` |
+| mediator | `mediator-buildathon` | `messaging.mediator` (0.48.0) | `e6e2c636`, `0.48.0-e6e2c636` | `ghcr.io/bmiller59/mediator-buildathon:0.48.0-e6e2c636` |
+
+Where each tag exists:
+
+- **Built locally** (`images:build`): `<name>:<ref8>`, `<name>:<version>-<ref8>` and `<name>:local`. A `VTI_LOCAL=1` working-tree build is only `:local`.
+- **Pulled** (`images:pull`): pulled by digest, then, only when the image reports exactly the pinned digest, tagged locally `<name>:<ref8>` and `<name>:<version>-<ref8>` (the mediator included, so it needs no hand-tagging; running the pull again re-applies the tags to an image that is already here). A pulled image is **never** tagged `:local`: that tag means "built here by `images:build`", `IMAGES=local` keeps meaning that, and a pull must not overwrite your own build. `npm run up` does not need `:local` for a pulled image: it runs the pinned digest reference. (Plain `docker compose up` outside `npm run up` falls back to `:local`; set `VTA_IMAGE=vta-buildathon:0.72.0-26d0da81` etc., or build.) A pin without a recorded digest is pulled by tag, unverified, and is not tagged locally.
+- **In the registry**: the publish workflow pushes both tags on the same multi-arch index from now on. The images published on 2026-11-20 carry only the `<ref8>` tag; the next publish adds `<version>-<ref8>`. Until then, refer to a published image by its digest (what `images:pull` does) or by `<ref8>`.
+- **`npm run clean`** treats both forms of the current pin as kept, and both forms of any older pin as superseded.
+
+(The Farm portal's image names, such as `0.72.0-26d0da81`, follow the same `<version>-<ref8>` form but are the Farm's own images, see [FARM.md](FARM.md).)
 
 `pins.json` `images.<kind>.digest` is the multi-arch index digest, recorded on 2026-11-20 from the first real publish runs (and checked against the live registry). `images:pull` and `up` pull by
 digest (`<registry>/<name>@sha256:...`), so a moved tag cannot change what runs. A pin advance that has no recorded digest yet (`null`) pulls by tag and
@@ -166,15 +180,15 @@ route is preferred because the images are then built from a clean checkout, labe
 
 ### First run
 
-1. **Check the owner allows public packages.** For an organisation: Organisation settings > Packages > "Package creation" must allow **public** packages (public packages on GHCR are free of charge; the repository is public). Without
-   this, the first push fails with a permission error. (An organisation that disallows public packages is why the first images were published under a personal account's registry, `ghcr.io/bmiller59`.) A fork under another owner sets `IMAGE_REGISTRY` and `VERIFY_REPO`.
+1. **Check the owner can create public packages** (Packages settings of the account or organisation; public packages on GHCR are free of charge and the repository is public). Without
+   this, the first push fails with a permission error. A fork under another owner sets `IMAGE_REGISTRY` and `VERIFY_REPO`.
 2. **Actions must be enabled** for the repository, and workflows may need "Read and write permissions" under Settings > Actions > General >
-   Workflow permissions (the workflow requests `packages: write` itself, but an org policy can cap it).
+   Workflow permissions (the workflow requests `packages: write` itself, but an organisation policy can cap it).
 3. **Dry run first.** Actions > images > Run workflow, `images` = `vta` (the quickest to learn from), `push` = **false**. This builds on the
    native amd64 and arm64 runners, runs `--version` and checks the labels, and pushes nothing.
 4. **Publish.** Run it again with `push` = true and `images` = `all`, or push a tag named `images-<date>`. Expect roughly 25 to 45
    minutes per image on GitHub's 4-vCPU runners (an estimate, not measured), in parallel. See the timeout notes at the top of the workflow.
-5. **Make the packages public.** New packages are **private** by default. For each of the three: GitHub > the org > Packages > the package >
+5. **Make the packages public.** New packages are **private** by default. For each of the three: GitHub > the owner's Packages > the package >
    Package settings > Change visibility > Public. Because the images carry the `org.opencontainers.image.source` label for this repository,
    the package is linked to the repository automatically on first push; if it is not, use "Connect repository" on the package page.
    (Linking is also what lets the repository's Actions keep pushing new versions.)
@@ -186,18 +200,18 @@ route is preferred because the images are then built from a clean checkout, labe
 
 ### When pins advance
 
-Advance a pin per [PINS.md](PINS.md), then re-run the workflow (tag `images-<date>`), record the new digests, and commit. The tag in the
-registry changes with the ref, so an old tag stays available for those who need it. The images are for development only: the mediator is
+Advance a pin per [PINS.md](PINS.md), then re-run the workflow (tag `images-<date>`), record the new digests, and commit. The tags in the
+registry change with the ref and version, so an old tag stays available for those who need it. The images are for development only: the mediator is
 open-ACL by design and the VTA stores a plaintext seed ([MODES.md](MODES.md), [SECURITY.md](SECURITY.md)).
 
 ### If something fails
 
 | Symptom | Likely cause |
 |---|---|
-| Push fails with 403 or "denied" at the first push | Package creation by members is off in the org (step 1), or an org policy caps the token's permissions (step 2). |
+| Push fails with 403 or "denied" at the first push | The owner cannot create public packages (step 1), or a policy caps the token's permissions (step 2). |
 | `permission_denied: read_package` when pushing a package that already exists | The package was pushed by hand, so the repository's workflow token has no access to it. Either delete that package and let the workflow create it, or open the package settings, "Manage Actions access", and add this repository with the Write role. Seen on the first real run. |
 | `cannot allocate memory` or "the runner has received a shutdown signal" during a Rust build | The runner ran out of memory. The build job adds 16 GB of swap before building and caps the build at 12g (a 16 GB runner without swap was OOM-killed in the Rust link step); if it still happens, build fewer images per run (`images=vta`, then `vtc`, then `mediator`). |
-| arm64 jobs wait for ever | The `ubuntu-24.04-arm` runner is not available to the organisation. See the QEMU fallback in the workflow comments (hours, not minutes), or publish amd64 only. |
+| arm64 jobs wait for ever | The `ubuntu-24.04-arm` runner is not available to the account. See the QEMU fallback in the workflow comments (hours, not minutes), or publish amd64 only. |
 | A build leg is cancelled at its timeout | The runner was slower than the estimate. Raise `timeout` in the plan step, and record the real time in this file. |
 | `fetch ... origin <sha>` fails in the VTA or VTC leg | The pinned commit is not reachable from the upstream repository (force-pushed or deleted). Re-pin ([PINS.md](PINS.md)). |
 | `pull access denied` for a participant | A stale `docker login ghcr.io` token (`docker logout ghcr.io`), the package was made private again (step 5), or `IMAGE_REGISTRY` points elsewhere. Build locally as a fallback (`npm run setup`). |

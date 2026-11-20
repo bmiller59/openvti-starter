@@ -16,7 +16,7 @@
 // --force    build despite the preflight refusal (free disk on Docker's data root < 10 GB, or engine memory < 4 GB); warnings never block.
 // Labels: the same provenance labels the published images carry (pinned ref, upstream source, Dockerfile sha256,
 //         features, build-origin=local); `npm run images:verify --local` and `images:compare` read them (docs/VERIFY.md).
-// Tags: <image>:<short-sha> and <image>:local (what compose defaults to).
+// Tags: <image>:<ref8>, <image>:<version>-<ref8> and <image>:local (what compose defaults to); scripts/lib/image-tags.ts.
 // The exported source directory is removed even when you interrupt the build. Older builds stay as superseded images: `npm run clean` lists and removes them.
 import "./lib/cli.js";
 import { spawn, spawnSync } from "node:child_process";
@@ -35,6 +35,7 @@ import { buildLabels, imageSpecs, labelArgs, realDocker, type ImageKind } from "
 import { missingCheckoutMessage, missingRefMessage, parseBuildArgs } from "./lib/build-help.js";
 import { confirm } from "./lib/prompt.js";
 import { MEDIATOR_BUILD_NOTICE, memoryWarning } from "./lib/tunnel.js";
+import { localRefs } from "./lib/image-tags.js";
 import { pins } from "./pins.js";
 import { buildPreflight, ensureBuilder, limitedBuildArgv, limitsFromEnv, limitsNote, parseLimitFlags } from "./lib/build-limits.js";
 import { effectiveCores, realResources } from "./lib/host-resources.js";
@@ -86,7 +87,7 @@ async function buildMediator(): Promise<void> {
   console.log(MEDIATOR_BUILD_NOTICE);
   const warn = memoryWarning(availKb(), 8);
   if (warn) console.warn(`WARNING: ${warn}`);
-  const tags = [`${m.image}:${short}`, `${m.image}:local`];
+  const tags = localRefs({ name: m.image, version: m.version, ref: m.ref }, { local: true });
   const dockerfile = resolve("docker/mediator.Dockerfile");
   const labels = labelArgs(buildLabels("mediator", pins(), { dockerfileSha256: sha256(dockerfile) }));
   console.log(`building ${tags.join(", ")} from ${m.repo} @ ${m.ref} (mediator ${m.version}, features ${m.features})`);
@@ -124,7 +125,7 @@ async function buildOne(name: "vta" | "vtc"): Promise<void> {
     ctx = tmp;
   }
   try {
-    const tags = local ? [`${image}:local`] : [`${image}:${short}`, `${image}:local`];
+    const tags = local ? [`${image}:local`] : localRefs({ name: image, version: vti[name].version, ref }, { local: true });
     const file = name === "vta" ? join(ctx, "Dockerfile") : resolve("docker/vtc.Dockerfile");
     console.log(`building ${tags.join(", ")} from ${local ? `${repo} (working tree)` : `${tag} ${ref}`}`);
     // The VTA needs `tsp` for MODE=tunnel and the VTI Dockerfile's default feature list lacks it (pins.json vta.features).

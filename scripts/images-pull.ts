@@ -1,5 +1,7 @@
-// Pull the prebuilt images pinned in pins.json (docs/IMAGES.md). While pins.json images.available is false (the organisation does
-// not allow public packages) this explains how to build locally and does nothing, unless IMAGES=registry is set (people with access).
+// Pull the prebuilt images pinned in pins.json (docs/IMAGES.md). While pins.json images.available is false
+// this explains how to build locally and does nothing, unless IMAGES=registry is set (you have access to the packages).
+//   After a pull (or when the image is already here) the verified image is tagged <name>:<ref8> and <name>:<version>-<ref8>
+//   (scripts/lib/image-tags.ts); never :local, which is reserved for images:build.
 //   npm run images:pull [vta|vtc|mediator|all] [--check] [--force] [--by-digest]
 //   all = vta + vtc + mediator (unlike images:build, pulling the mediator is cheap)
 //   --check  report what is present and what would be pulled; no network, nothing changed
@@ -12,6 +14,7 @@ import "./lib/cli.js";
 import { spawnSync } from "node:child_process";
 import { die } from "./env.js";
 import { currentMode, friendlyPullError, IMAGE_KINDS, imagesAvailable, imageSpecs, imageStatus, pullUnavailableMessage, NO_DIGEST_WARNING, pullTarget, realDocker, type ImageKind } from "./lib/images.js";
+import { realTagger, tagVerified } from "./lib/image-tags.js";
 import { pins } from "./pins.js";
 
 const args = process.argv.slice(2);
@@ -22,7 +25,7 @@ if (which !== "all" && !IMAGE_KINDS.includes(which as ImageKind)) die("usage: np
 const kinds: readonly ImageKind[] = which === "all" ? IMAGE_KINDS : [which as ImageKind];
 
 let mode;
-let specs;
+let specs: ReturnType<typeof imageSpecs>;
 try {
   mode = currentMode();
   specs = imageSpecs(pins(), process.env.IMAGE_REGISTRY);
@@ -56,12 +59,24 @@ const refused = kinds.map((k) => pullTarget(specs[k], byDigest)).flatMap((t) => 
 if (refused.length) die(refused.join("\n"));
 
 const failed: string[] = [];
+/**
+ * Give the pulled image its canonical local tags (<name>:<ref8>, <name>:<version>-<ref8>), also when it was already here, so
+ * an image pulled before this existed (the mediator) gets them without a new pull. See tagVerified.
+ */
+function tagLocally(kind: ImageKind, ref: string): boolean {
+  const t = tagVerified(specs[kind], ref, realTagger);
+  if (t.tagged.length) console.log(`${kind}: tagged ${t.tagged.join(", ")}`);
+  else if (t.message) (t.ok ? console.warn : console.error)(`${kind}: ${t.message}.`);
+  return t.ok;
+}
+
 for (const kind of kinds) {
   const spec = specs[kind];
   const target = pullTarget(spec, byDigest);
   if (!target.ok) continue;
   if (!flags.has("--force") && realDocker.has(target.ref)) {
     console.log(`${kind}: ${target.ref} is already here (--force to pull again)`);
+    if (!tagLocally(kind, target.ref)) failed.push(kind);
     continue;
   }
   console.log(`${kind}: pulling ${target.ref}`);
@@ -77,7 +92,9 @@ for (const kind of kinds) {
   if (spec.digest && !digests.split("\n").includes(`${spec.repo}@${spec.digest}`)) {
     console.error(`${kind}: the pulled image does not report the pinned digest ${spec.digest}. Do not use it.`);
     failed.push(kind);
+    continue;
   }
+  if (!tagLocally(kind, target.ref)) failed.push(kind);
 }
 if (failed.length) {
   console.error(`\nnot pulled: ${failed.join(", ")}. You can still build locally and run with IMAGES=local:\n${failed.map((k) => `  ${specs[k as ImageKind].buildCmd}`).join("\n")}`);
