@@ -3,12 +3,19 @@
 
 import type { ImageKind } from "./images.js";
 
-/** How long a cold build takes. The planning figure is for a laptop; 12 to 25 min was measured on a 12-core desktop (docs/PINS.md). Later builds reuse Docker's layer cache. */
+/**
+ * How long a cold build takes (docs/IMAGES.md#build-requirements). 12 to 25 min was measured on a 12-core desktop and about 26 to 29 min per leg
+ * on GitHub-hosted runners; the 25 to 40 min laptop figure is an unmeasured estimate (the planning number; the mediator figure is from a 12-core desktop). Later builds reuse Docker's layer cache.
+ */
 export const BUILD_ESTIMATE: Record<ImageKind, string> = {
   vta: "25 to 40 min cold",
   vtc: "25 to 40 min cold",
   mediator: "about 12 min cold",
 };
+
+/** The ways to get images without a heavy local build; shown wherever a machine is too small. Details: docs/IMAGES.md#build-requirements. */
+export const LOW_RESOURCE_FALLBACKS =
+  "build on a stronger machine and `npm run images:import` the tar (docs/IMAGES.md), RUNTIME=binary with MODE=local (docs/BINARIES.md), MODE=farm (docs/FARM.md), or prebuilt images once they are published (docs/PINS.md)";
 
 /** 754000 -> "12m 34s". */
 export function formatElapsed(ms: number): string {

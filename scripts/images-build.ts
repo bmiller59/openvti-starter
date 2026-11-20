@@ -12,7 +12,8 @@
 // TMPDIR     where the exported source goes (default the OS temp dir; use /var/tmp/<name> for heavy runs).
 // CONTAINER_ENGINE=podman  build with podman instead of docker (the same --memory / --cpus limits are passed to `podman build` as memory, memory-swap and a CPU quota; rootless podman usually cannot delegate cpuset).
 // --memory 8g / --cpus 4 / --no-limits (or BUILD_MEMORY / BUILD_CPUS / BUILD_LIMITS=0 in the environment or .env): the builds run on a capped,
-//            low-priority buildx builder, default 6g memory (no swap) and a quarter of the cores, pinned (scripts/lib/build-limits.ts).
+//            low-priority buildx builder, default half the engine's RAM (6g to 12g; memory-swap 2x when the host has swap), a quarter of the cores (at least 2 from 4 cores), pinned (scripts/lib/build-limits.ts).
+// --force    build despite the preflight refusal (free disk on Docker's data root < 10 GB, or engine memory < 4 GB); warnings never block.
 // Labels: the same provenance labels the published images carry (pinned ref, upstream source, Dockerfile sha256,
 //         features, build-origin=local); `npm run images:verify --local` and `images:compare` read them (docs/VERIFY.md).
 // Tags: <image>:<short-sha> and <image>:local (what compose defaults to).
@@ -35,15 +36,15 @@ import { missingCheckoutMessage, missingRefMessage, parseBuildArgs } from "./lib
 import { confirm } from "./lib/prompt.js";
 import { MEDIATOR_BUILD_NOTICE, memoryWarning } from "./lib/tunnel.js";
 import { pins } from "./pins.js";
-import { ensureBuilder, limitedBuildArgv, limitsFromEnv, limitsNote, parseLimitFlags } from "./lib/build-limits.js";
-import { cpus } from "node:os";
+import { buildPreflight, ensureBuilder, limitedBuildArgv, limitsFromEnv, limitsNote, parseLimitFlags } from "./lib/build-limits.js";
+import { effectiveCores, realResources } from "./lib/host-resources.js";
 
 const limitFlags = parseLimitFlags(process.argv.slice(2));
 if (limitFlags.error) die(limitFlags.error);
 const flags = parseModeFlags(limitFlags.rest);
 if (flags.error) die(flags.error);
 const { which, clone } = parseBuildArgs(flags.rest);
-if (!["vta", "vtc", "mediator", "all", "needed"].includes(which)) die("usage: npm run images:build [vta|vtc|mediator|all|needed] [--clone] [--memory 8g] [--cpus 4] [--no-limits]   (npm run setup = needed; mode flags --local/--tunnel/--no-vtc apply to `needed`)");
+if (!["vta", "vtc", "mediator", "all", "needed"].includes(which)) die("usage: npm run images:build [vta|vtc|mediator|all|needed] [--clone] [--memory 8g] [--cpus 4] [--no-limits] [--force]   (npm run setup = needed; mode flags --local/--tunnel/--no-vtc apply to `needed`)");
 if (flags.mode) process.env.MODE = flags.mode;
 if (flags.vtc !== undefined) process.env.WITH_VTC = flags.vtc ? "1" : "0";
 const vti = pins().vti;
@@ -51,12 +52,12 @@ let limits: ReturnType<typeof limitsFromEnv>;
 // CONTAINER_ENGINE=podman builds with podman (rootless, no docker access needed, e.g. on a shared build server). The memory/CPU
 // caps then come from the caller (systemd-run / cgroup), so the buildx builder is not used.
 const engine = process.env.CONTAINER_ENGINE ?? "docker";
-try { limits = limitsFromEnv({ BUILD_MEMORY: env("BUILD_MEMORY"), BUILD_CPUS: env("BUILD_CPUS"), BUILD_LIMITS: env("BUILD_LIMITS"), ...limitFlags.env }, cpus().length); } catch (e) { die((e as Error).message); }
+const res = realResources(engine === "docker");
+try { limits = limitsFromEnv({ BUILD_MEMORY: env("BUILD_MEMORY"), BUILD_CPUS: env("BUILD_CPUS"), BUILD_LIMITS: env("BUILD_LIMITS"), ...limitFlags.env }, effectiveCores(res), res); } catch (e) { die((e as Error).message); }
 console.log(limitsNote(limits) + (engine === "docker" ? "" : `  [engine: ${engine}]`));
-if (limits && engine === "docker") { const err = ensureBuilder(limits); if (err) die(err); }
 /** `docker build <args>`, niced and (unless BUILD_LIMITS=0) run in the memory/CPU-capped builder. */
 const dockerBuild = async (args: string[]) => {
-  const [cmd, ...rest] = engine === "docker" ? limitedBuildArgv(limits, args) : ["nice", "-n", "10", engine, "build", ...(limits ? ["--memory", limits.memory, "--memory-swap", limits.memory, "--cpu-period", "100000", "--cpu-quota", String(Math.round(limits.cpus * 100000))] : []), ...args];
+  const [cmd, ...rest] = engine === "docker" ? limitedBuildArgv(limits, args) : ["nice", "-n", "10", engine, "build", ...(limits ? ["--memory", limits.memory, "--memory-swap", limits.memorySwap ?? limits.memory, "--cpu-period", "100000", "--cpu-quota", String(Math.round(limits.cpus * 100000))] : []), ...args];
   // Async (not spawnSync) so SIGINT/SIGTERM reach our handler while the build runs: it stops the build and removes the export directory (lib/tmpdirs.ts).
   const child = spawn(cmd, rest, { stdio: "inherit" });
   onSignalKill(() => child.kill("SIGTERM"));
@@ -145,6 +146,13 @@ if (which === "needed") {
 if (plan.some((k) => k !== "mediator")) {
   const warn = memoryWarning(availKb(), 4);
   if (warn) console.warn(`WARNING: ${warn}`);
+}
+if (plan.length) {
+  const pf = buildPreflight({ limits, res, rust: plan.some((k) => k !== "mediator"), force: limitFlags.force });
+  for (const w of pf.warnings) console.warn(`WARNING: ${w}`);
+  if (pf.errors.length && !limitFlags.force) die(`this machine looks too small for a local build:\n  ${pf.errors.join("\n  ")}`);
+  if (pf.errors.length) console.warn(`WARNING (--force): ${pf.errors[0]}`);
+  if (limits && engine === "docker") { const err = ensureBuilder(limits); if (err) die(err); }
 }
 const started = Date.now();
 for (const kind of plan) {

@@ -13,9 +13,11 @@ import { runtimeModeError } from "./lib/binary.js";
 import { anyRunning, binaryChecks } from "./lib/binary-run.js";
 import { modeLine, parseModeFlags } from "./lib/modes.js";
 import {
-  blocking, cloudflaredCheck, type Check, dockerCheck, DEV_PORTS, devPortCheck, formatChecks, imageChecks, imagesNeeded, CORS_PORTS, DEV_SCAN_RANGES, MEDIATOR_PORT, mediatorPortCheck, viteOriginCheck,
-  memoryCheck, nodeCheck, STACK_PORTS, stackPortCheck, summary, vtiCheckout,
+  blocking, cloudflaredCheck, imagesToBuild, type Check, dockerCheck, DEV_PORTS, devPortCheck, formatChecks, imageChecks, imagesNeeded, CORS_PORTS, DEV_SCAN_RANGES, MEDIATOR_PORT, mediatorPortCheck, viteOriginCheck,
+  cpuCheck, diskCheck, dockerVmCheck, ramSwapCheck, memoryCheck, nodeCheck, STACK_PORTS, stackPortCheck, summary, vtiCheckout,
 } from "./lib/doctor.js";
+import { limitsFromEnv, type BuildLimits } from "./lib/build-limits.js";
+import { effectiveCores, realResources } from "./lib/host-resources.js";
 import { have } from "./lib/compose.js";
 import { currentMode, imagesAvailable, imageSpecs, imageStatus, realDocker } from "./lib/images.js";
 import { pins } from "./pins.js";
@@ -94,6 +96,16 @@ export async function runChecks(o: DoctorOptions): Promise<Check[]> {
         images = [{ level: "fail", name: "Images", detail: (e as Error).message, fix: "see docs/IMAGES.md" }];
       }
       out.push(...images);
+      // Resource checks only matter when something has to be built here.
+      const specsNow = imageSpecs(pins(), env("IMAGE_REGISTRY"));
+      let toBuild: ReturnType<typeof imagesToBuild> = [];
+      try { toBuild = imagesToBuild(o.mode, o.withVtc, specsNow, (ref) => realDocker.has(ref)); } catch { /* the image checks above already report it */ }
+      if (toBuild.length) {
+        const res = realResources(true);
+        let limits: BuildLimits | undefined;
+        try { limits = limitsFromEnv({ BUILD_MEMORY: env("BUILD_MEMORY"), BUILD_CPUS: env("BUILD_CPUS"), BUILD_LIMITS: env("BUILD_LIMITS") }, effectiveCores(res), res); } catch { /* images:build reports a malformed value */ }
+        out.push(diskCheck(res.dockerRootFreeBytes, res.dockerRootDir), ramSwapCheck(res), dockerVmCheck(res), cpuCheck(limits, effectiveCores(res)));
+      }
       const buildsVti = images.some((c) => c.level !== "ok" && /vta|vtc/.test(c.name));
       if (buildsVti) {
         const dir = resolve(process.env.VTI_PATH ?? "../verifiable-trust-infrastructure");

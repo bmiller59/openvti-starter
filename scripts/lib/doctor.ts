@@ -1,6 +1,8 @@
 // `npm run doctor`: the checks, as pure functions over probe results, so the messages are tested without Docker.
 // scripts/doctor.ts gathers the real probes; `up` runs the blocking subset first.
-import { BUILD_ESTIMATE, cloneCommand, DEFAULT_VTI_DIR } from "./build-help.js";
+import { BUILD_ESTIMATE, cloneCommand, DEFAULT_VTI_DIR, LOW_RESOURCE_FALLBACKS } from "./build-help.js";
+import { MIN_ENGINE_MEMORY_GB, MIN_FREE_DISK_GB, WARN_FREE_DISK_GB, type BuildLimits } from "./build-limits.js";
+import { engineMemBytes, GIB, type HostResources } from "./host-resources.js";
 import type { ImageKind, ImageSpec, StatusRow } from "./images.js";
 
 export type Level = "ok" | "warn" | "fail";
@@ -38,7 +40,51 @@ export function memoryCheck(availKb: number | undefined, needGb: number, forWhat
   const gb = availKb / 1024 / 1024;
   return gb >= needGb
     ? { level: "ok", name: "Memory", detail: `${gb.toFixed(1)} GB available` }
-    : { level: "warn", name: "Memory", detail: `${gb.toFixed(1)} GB available; ${forWhat} wants about ${needGb} GB`, fix: "close other applications (a Rust image build is the heavy part)" };
+    : { level: "warn", name: "Memory", detail: `${gb.toFixed(1)} GB available; ${forWhat} wants about ${needGb} GB`, fix: `close other applications (a Rust image build is the heavy part), or skip the local build: ${LOW_RESOURCE_FALLBACKS}` };
+}
+
+const gbOf = (b: number) => (b / GIB).toFixed(1);
+
+/** Free disk on Docker's data root, judged for a build: < 10 GB fails (the build refuses), < 20 GB warns. Undefined free = not measurable (Docker Desktop VM, remote engine, no permission). */
+export function diskCheck(free: number | undefined, root?: string): Check {
+  const name = "Disk (Docker data root)";
+  if (free === undefined) return { level: "ok", name, detail: "not measured here (Docker Desktop VM, remote engine or no permission); a build wants 20 GB or more free" };
+  const detail = `${gbOf(free)} GB free${root ? ` on ${root}` : ""}`;
+  if (free < MIN_FREE_DISK_GB * GIB) return { level: "fail", name, detail: `${detail}; a build needs at least ${MIN_FREE_DISK_GB} GB`, fix: `free space (npm run clean lists what can be reclaimed), or skip the local build: ${LOW_RESOURCE_FALLBACKS}` };
+  if (free < WARN_FREE_DISK_GB * GIB) return { level: "warn", name, detail: `${detail}; plan for ${WARN_FREE_DISK_GB} GB or more (BuildKit cache about 12 GB, images about 200 MB each)`, fix: "npm run clean lists what can be reclaimed (dry run)" };
+  return { level: "ok", name, detail };
+}
+
+/** Host RAM and swap (Linux only; elsewhere only Docker's own numbers are known, see dockerVmCheck). Warns, never blocks. */
+export function ramSwapCheck(r: HostResources): Check {
+  const name = "RAM and swap";
+  if (r.hostMemBytes === undefined) return { level: "ok", name, detail: "host RAM not measured on this OS; see the Docker memory line" };
+  const swap = r.hostSwapBytes ?? 0;
+  const detail = `${gbOf(r.hostMemBytes)} GB RAM, ${gbOf(swap)} GB swap`;
+  if (r.hostMemBytes < 8 * GIB) return { level: "warn", name, detail: `${detail}; a Rust image build wants 8 GB or more`, fix: `add swap or skip the local build: ${LOW_RESOURCE_FALLBACKS}` };
+  if (swap === 0 && r.hostMemBytes <= 16 * GIB) return { level: "warn", name, detail: `${detail}; no swap, and the Rust link step can be OOM-killed on 16 GB or less without it`, fix: "add a few GB of swap (docs/IMAGES.md#build-requirements)" };
+  return { level: "ok", name, detail };
+}
+
+/** Docker's own memory and CPU view (`docker info`): the Docker Desktop VM's limits, or the host's on Linux. < 4 GB fails (the build refuses), < 8 GB warns. */
+export function dockerVmCheck(r: HostResources): Check {
+  const name = "Docker memory and CPUs";
+  const mem = engineMemBytes(r);
+  if (r.dockerMemBytes === undefined || mem === undefined) return { level: "ok", name, detail: "not reported by docker info" };
+  const detail = `${gbOf(r.dockerMemBytes)} GB memory, ${r.dockerCpus ?? "?"} CPU(s)`;
+  if (mem < MIN_ENGINE_MEMORY_GB * GIB) return { level: "fail", name, detail: `${detail}; a Rust build needs at least ${MIN_ENGINE_MEMORY_GB} GB`, fix: `Docker Desktop: raise memory in Settings > Resources; or skip the local build: ${LOW_RESOURCE_FALLBACKS}` };
+  if (mem < 8 * GIB) return { level: "warn", name, detail: `${detail}; 8 GB or more is comfortable`, fix: "Docker Desktop: raise memory in Settings > Resources (docs/IMAGES.md#build-requirements)" };
+  return { level: "ok", name, detail };
+}
+
+/** CPUs the build will use. Warns when the cap resolves to a single core (a cold build then takes well over an hour). Undefined limits = BUILD_LIMITS=0. */
+export function cpuCheck(limits: BuildLimits | undefined, cores: number): Check {
+  const name = "CPUs";
+  if (!limits) return { level: "ok", name, detail: `${cores} core(s); build limits are off (--no-limits)` };
+  const detail = `${cores} core(s); builds use ${limits.cpus}`;
+  return limits.cpus <= 1
+    ? { level: "warn", name, detail: `${detail}; a cold Rust build will take well over an hour`, fix: `BUILD_CPUS=N if cores are spare; or skip the local build: ${LOW_RESOURCE_FALLBACKS}` }
+    : { level: "ok", name, detail };
 }
 
 export interface PortProbe { port: number; busy: boolean; ownStack: boolean }

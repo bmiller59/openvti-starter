@@ -176,3 +176,41 @@ test("setup plan: only what the mode needs and is not built yet", () => {
   assert.deepEqual(imagesToBuild("farm", true, specs, has([])), []);
   assert.deepEqual(imagesToBuild("local", true, specs, has([specs.vta.local, specs.vtc.local])), []);
 });
+
+import { cpuCheck, diskCheck, dockerVmCheck, ramSwapCheck } from "../lib/doctor.js";
+const G = 1024 ** 3;
+
+test("disk: under 10 GB fails, under 20 GB warns, unmeasured is not a claim", () => {
+  assert.equal(diskCheck(9 * G, "/var/lib/docker").level, "fail");
+  assert.match(diskCheck(9 * G).fix!, /images:import/);
+  assert.equal(diskCheck(15 * G).level, "warn");
+  assert.equal(diskCheck(20 * G).level, "ok");
+  assert.equal(diskCheck(undefined).level, "ok");
+  assert.match(diskCheck(undefined).detail, /not measured/);
+});
+
+test("RAM and swap warn, never fail; non-Linux claims nothing", () => {
+  assert.equal(ramSwapCheck({ cores: 4, hostMemBytes: 4 * G, hostSwapBytes: 0 }).level, "warn");
+  assert.equal(ramSwapCheck({ cores: 4, hostMemBytes: 16 * G, hostSwapBytes: 0 }).level, "warn");
+  assert.equal(ramSwapCheck({ cores: 4, hostMemBytes: 16 * G, hostSwapBytes: 8 * G }).level, "ok");
+  assert.equal(ramSwapCheck({ cores: 4, hostMemBytes: 32 * G, hostSwapBytes: 0 }).level, "ok");
+  assert.match(ramSwapCheck({ cores: 4 }).detail, /not measured/);
+});
+
+test("Docker memory: under 4 GB fails, under 8 GB warns", () => {
+  assert.equal(dockerVmCheck({ cores: 8, dockerMemBytes: 3 * G, dockerCpus: 4 }).level, "fail");
+  assert.equal(dockerVmCheck({ cores: 8, dockerMemBytes: 7 * G, dockerCpus: 4 }).level, "warn");
+  assert.equal(dockerVmCheck({ cores: 8, dockerMemBytes: 8 * G, dockerCpus: 4 }).level, "ok");
+  assert.equal(dockerVmCheck({ cores: 8 }).level, "ok");
+});
+
+test("CPU check warns only when the cap is one core", () => {
+  assert.equal(cpuCheck({ memory: "6g", cpus: 1 }, 2).level, "warn");
+  assert.match(cpuCheck({ memory: "6g", cpus: 1 }, 2).detail, /over an hour/);
+  assert.equal(cpuCheck({ memory: "6g", cpus: 2 }, 4).level, "ok");
+  assert.equal(cpuCheck(undefined, 4).level, "ok");
+});
+
+test("the low-memory fix points at the fallbacks", () => {
+  assert.match(memoryCheck(1024 * 1024, 4, "x").fix!, /images:import.*RUNTIME=binary.*MODE=farm/);
+});
