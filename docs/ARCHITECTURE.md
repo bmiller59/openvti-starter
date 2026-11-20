@@ -74,7 +74,7 @@ flowchart LR
 
 ## Pins and image build
 
-`pins.json` records the upstream release (VTA and VTC come from different commits) and exact npm versions. `npm run images:build [vta|vtc|mediator|all]` builds each image from its own pinned ref of a local checkout of the upstream repository (`VTI_PATH`), tagging `<image>:<short-sha>` and `:local`, the default in compose. `npm run pins:check` reports drift. See [PINS.md](PINS.md). Building an image from source is slow (Rust), and prebuilt images are not yet available (the organisation does not allow public packages; `images.available` is `false` in `pins.json`), so each machine builds its own: `npm run setup` builds what the mode needs, and `images:export` / `images:import` copy the result between machines ([IMAGES.md](IMAGES.md)). The publish workflow, signing and digests stay in the repository for later.
+`pins.json` records the upstream release (the VTA and VTC are cut from one commit) and exact npm versions. `npm run images:build [vta|vtc|mediator|all]` builds each image from its own pinned ref of a local checkout of the upstream repository (`VTI_PATH`), tagging `<image>:<short-sha>` and `:local`, the default in compose. `npm run pins:check` reports drift. See [PINS.md](PINS.md). Building an image from source is slow (Rust), and prebuilt images are not yet available (the organisation does not allow public packages; `images.available` is `false` in `pins.json`), so each machine builds its own: `npm run setup` builds what the mode needs, and `images:export` / `images:import` copy the result between machines ([IMAGES.md](IMAGES.md)). The publish workflow, signing and digests stay in the repository for later.
 
 ## Framework-free and React
 
@@ -103,4 +103,4 @@ None of them needs a running VTA. `npm run typecheck` runs `tsc` in the root and
 - **Your own task**: change `NOTE_TYPE`, the schema and handler in `templates/inbox-verifier/src/inbox.ts` ([trust-tasks/04-developing-tasks.md](trust-tasks/04-developing-tasks.md)).
 - **A new template**: add a folder under `templates/` with a `package.json` named `@starter/<name>` (workspaces pick it up), depend on `@starter/vta-client`, and read the credential as `web-vta-app` does. Add its scripts to the docs; `npm run check:docs` will catch a mistyped one.
 - **A new command**: add `scripts/<name>.ts`, an entry in the root `package.json`, call `devBanner()` from `scripts/banner.ts` if it creates keys.
-- **A new pin**: edit `pins.json`, run `npm run pins:check`, note it in `PINS_LOG.md`.
+- **A new pin**: `npm run pins:update` (dry run, then `--apply`), `npm run pins:verify`, note it in `PINS_LOG.md` ([PINS.md](PINS.md)).

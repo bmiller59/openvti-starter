@@ -57,6 +57,8 @@
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "test": "tsx scripts/check-generic.ts && tsx scripts/check-docs.ts && tsx --test scripts/test/*.test.ts && npm test --workspaces --if-present",
     "pins:check": "tsx scripts/pins-check.ts",
+    "pins:update": "tsx scripts/pins-update.ts",
+    "pins:verify": "tsx scripts/pins-verify.ts",
     "setup": "tsx scripts/images-build.ts needed",
     "images:build": "tsx scripts/images-build.ts",
     "images:pull": "tsx scripts/images-pull.ts",

@@ -1,0 +1,56 @@
+# Weekly (and manual) check for newer upstream VTA/VTC release tags. It runs `npm run pins:update` as a dry run and,
+# when a newer release exists, opens (or updates) ONE issue. It never edits pins.json, never opens a pull request and
+# never merges: advancing a pin is deliberate and verified by hand (docs/PINS.md: `pins:update --apply`, then `pins:verify`).
+# Action refs are pinned to full commit SHAs, the same as images.yml. STATUS: written and YAML-checked locally, not yet run on GitHub.
+name: pins-bump
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pins-bump
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Dry-run pins:update
+        id: plan
+        run: |
+          set -euo pipefail
+          npm run --silent pins:update -- --json > plan.json
+          cat plan.json
+          echo "available=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("plan.json","utf8")).updateAvailable)')" >> "$GITHUB_OUTPUT"
+      - name: Open or update the issue
+        if: steps.plan.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Newer upstream VTA/VTC release available"
+          body="$(node -e '
+            const p = JSON.parse(require("fs").readFileSync("plan.json", "utf8"));
+            const rows = p.changes.map((c) => "- `" + c.what + "`: " + c.from.slice(0, 40) + " -> " + c.to.slice(0, 40)).join("\n");
+            const blk = p.blockers.length ? "\n\nCurrently blocking `--apply`:\n" + p.blockers.map((b) => "- " + b).join("\n") : "";
+            console.log("A dry run of `npm run pins:update` found newer upstream releases (" + p.vta + ", " + p.vtc + ", commit " + String(p.ref).slice(0, 8) + ").\n\n" + rows + blk +
+              "\n\nNothing was changed. To advance deliberately: `npm run pins:update -- --apply --log`, then `npm run pins:verify` (needs Docker), then commit. See docs/PINS.md.");
+          ')"
+          existing="$(gh issue list --state open --search "\"$title\" in:title" --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

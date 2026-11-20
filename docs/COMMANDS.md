@@ -44,7 +44,7 @@ muscle memory keep working; a test fails if a script is missing from this page.
 
 ## Organiser
 
-`images:pull [vta|vtc|mediator|all]` (explains that prebuilt images are not yet available; [IMAGES.md](IMAGES.md)), `images:build [vta|vtc|mediator|all|needed]`, `images:export` / `images:import -- file.tar` (share the images you built with another machine, no registry; [IMAGES.md](IMAGES.md)), `images:verify [vta|vtc|mediator|all]` (`-- --local` for your own build) and `images:compare` ([VERIFY.md](VERIFY.md)), `pins:check` ([PINS.md](PINS.md)); `farm:setup`, `farm:check`, `farm:probe`, `farm:canary` ([FARM.md](FARM.md), [EVENT.md](EVENT.md)).
+`pins:update [-- --apply --log]` (dry run by default: propose the newest upstream VTA/VTC release pins; refuses on a dirty tree, split commits, a missing tag or a downgrade; [PINS.md](PINS.md#advancing-never-automatic)), `pins:verify` (the live Docker gate after a pin change; prints a PINS_LOG line only if everything passes), `images:pull [vta|vtc|mediator|all]` (explains that prebuilt images are not yet available; [IMAGES.md](IMAGES.md)), `images:build [vta|vtc|mediator|all|needed]`, `images:export` / `images:import -- file.tar` (share the images you built with another machine, no registry; [IMAGES.md](IMAGES.md)), `images:verify [vta|vtc|mediator|all]` (`-- --local` for your own build) and `images:compare` ([VERIFY.md](VERIFY.md)), `pins:check` ([PINS.md](PINS.md)); `farm:setup`, `farm:check`, `farm:probe`, `farm:canary` ([FARM.md](FARM.md), [EVENT.md](EVENT.md)).
 
 ## Maintainer
 

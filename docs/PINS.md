@@ -67,7 +67,7 @@ For `MODE=tunnel` ([MODES.md](MODES.md)) there are more pins, in `pins.json` und
 
 | What | Pin | Why |
 |---|---|---|
-| `mediator-buildathon` | affinidi-messaging-mediator `e6e2c636` (tag v0.48.0), features `tsp,secrets-aws` | The mediator release the VTA 0.72.0 lockfile names (was v0.45.0 `7e378c03` for VTA 0.65.0); it reads TSP 1.0 like the VTA and VTC (the earlier pin, affinidi-tdk-rs `55580615` / v0.33.1, read only Rev 3); built from `docker/mediator.Dockerfile` (heavy: see MODES.md). |
+| `mediator-buildathon` | affinidi-messaging-mediator `e6e2c636` (tag v0.48.0; pins.json is authoritative), features `tsp,secrets-aws` | The mediator release the VTA 0.72.0 lockfile names (was v0.45.0 `7e378c03` for VTA 0.65.0); it reads TSP 1.0 like the VTA and VTC (the earlier pin, affinidi-tdk-rs `55580615` / v0.33.1, read only Rev 3); built from `docker/mediator.Dockerfile` (heavy: see MODES.md). |
 | `redis` | `7.4.6-alpine` | In-memory queue store for the mediator. |
 | `cloudflared` | validated 2024.6.1 (host binary, not pinned) | Quick tunnels. |
 | VTA build features | `setup,rest,didcomm,tsp,cli-synthesis,aws-secrets,webvh` | The VTI default has no `tsp`; the VTA then refuses `services.tsp = true`. |
@@ -85,13 +85,41 @@ Until then, the pins plus the canary's version warning are the guard.
 
 ## Advancing (never automatic)
 
-1. `npm run pins:check` and read the upstream changes you would take (VTI CHANGELOG, `vta-service`/`vtc-service` tags).
-2. Edit `pins.json` (per image `tag`, `ref`, `version`; `pinnedOn`, `why`; exact npm versions, then `npm install`).
-3. `npm run images:build`, then re-verify end to end: `WITH_VTC=1 npm run up`, `npm run hello`,
-   `vtc:hello`, `vtc:join`, `vtc:approve`, `npm test`, `npm run typecheck`, then `docker compose --profile vtc down -v`.
-4. Fix whatever broke (this is where the starter's scripts and docs change), update the verified/unverified notes in
-   [VTC.md](VTC.md), and run `npm run farm:probe` and read the [farm note](FARM.md#farm-versions-observed).
-5. Add one line to [PINS_LOG.md](../PINS_LOG.md): date, old -> new, why, what was re-verified.
-6. Rebuild and republish the images: run the `images` workflow and record the new digests in `pins.json` ([IMAGES.md](IMAGES.md), [EVENT.md](EVENT.md)). Until a digest is recorded, `pins:check` says so.
+Advancing is scripted but always deliberate: nothing changes a pin unless a person runs `--apply`, and nothing is logged as verified until the live gate has passed.
+
+```sh
+npm run pins:check                        # 1. report drift and the newest upstream tags; read the upstream changes you would take
+npm run pins:update                       # 2. dry run (default): prints the proposed pins.json changes and anything that would block them
+npm run pins:update -- --apply [--log]    # 3. write pins.json; --log also appends an UNVERIFIED entry to PINS_LOG.md
+npm run pins:verify                       # 4. the live gate (Docker): build, up, e2e, test:roles, hello; prints a PINS_LOG line only if all pass
+```
+
+`pins:update` finds the newest `vta-service-v*` and `vtc-service-v*` release tags (`git ls-remote` on `vti.repo`), resolves each to its commit and proposes `tag`, `version` and `ref` for both, plus `pinnedOn`, `updated` and an "unverified" `why`.
+Options: `--vta-tag` / `--vtc-tag` pin specific release tags; `--mediator <vX.Y.Z | commit>` (a bare commit also needs `--mediator-version`) moves the mediator pin; `--allow-downgrade`; `--json` prints the plan for tooling.
+The npm exact pins and the redis tag are not touched by the script: change them by hand in `pins.json`, then `npm install` (keep them exact).
+`--apply` **refuses** (exit 1, `pins.json` untouched) when: the working tree is dirty; the VTA and VTC tags resolve to different commits (they are built from one commit); a tag is not found upstream (or a released tag has moved); it is a downgrade without `--allow-downgrade`; or `pins.json` fails its schema check. A dry run prints the same `BLOCKED:` lines.
+After `--apply` it prints the gate commands, so you cannot forget them:
+
+```sh
+npm run images:build -- all
+WITH_VTC=1 npm run up
+npm run e2e
+npm run test:roles
+npm run hello
+```
+
+`pins:verify` runs exactly those (niced, each with a hard timeout, stops at the first failure, always runs `npm run down` afterwards) and needs Docker; `--plan` lists the steps without running anything. It never edits files: on all-pass it prints one ready-to-paste line for [PINS_LOG.md](../PINS_LOG.md), which replaces the UNVERIFIED line `--log` wrote.
+The gate covers `MODE=local` only; `MODE=tunnel` (mediator) and `farm:*` still need the manual checks below when you move those pins.
+
+Then, by hand:
+
+1. `npm test` and `npm run typecheck`; fix whatever broke (this is where the starter's scripts and docs change), and update the verified/unverified notes in [VTC.md](VTC.md) and [STATUS.md](STATUS.md).
+2. `npm run farm:probe` and read the [farm note](FARM.md#farm-versions-observed).
+3. Review the diff, commit (pin change, log line and doc changes together).
+4. Rebuild and republish the images: run the `images` workflow and record the new digests in `pins.json` ([IMAGES.md](IMAGES.md), [EVENT.md](EVENT.md)). Until a digest is recorded, `pins:check` says so.
+
+**Weekly reminder.** `.github/workflows/pins-bump.yml` runs `pins:update` as a dry run every Monday (and on demand) and opens one issue when a newer VTA/VTC release exists. It never edits `pins.json`, opens a pull request or merges.
+
+**Known gap: base images.** The Dockerfiles' base images (the Rust and runtime stages, in `docker/*.Dockerfile` and the VTI Dockerfile they build from) are not pinned by digest and are not covered by `pins.json` or `pins:update`. A rebuild can pick up a newer base image. Pin them by digest if you need bit-for-bit rebuilds.
 
 Pins are what was last validated, advance deliberately and say why.
