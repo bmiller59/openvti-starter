@@ -1,0 +1,75 @@
+// Never move a tag that is in use. Other projects and sessions share this machine's image store, so a tag like
+// `<name>:<ref8>` may be what somebody else's (running or stopped) container was created from. Moving it would leave
+// that project's next `docker compose up` on a different image. These checks are pure apart from `realQuery`, which is
+// the only thing that talks to Docker, and only read-only (`docker image inspect`, `docker ps -a`).
+import { spawnSync } from "node:child_process";
+
+export interface DockerQuery { run(args: string[]): { status: number | null; stdout: string } }
+
+export const realQuery: DockerQuery = {
+  run: (args) => {
+    const r = spawnSync("docker", args, { encoding: "utf8", timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
+    return { status: r.status, stdout: r.stdout ?? "" };
+  },
+};
+
+export interface ContainerUse { name: string; /** compose project, "" when it was not started by compose */ project: string }
+
+/** The image ID (sha256:...) a reference points to now, or undefined when it does not exist (or Docker cannot be asked). */
+export function imageId(q: DockerQuery, ref: string): string | undefined {
+  const r = q.run(["image", "inspect", ref, "--format", "{{.Id}}"]);
+  const id = r.stdout.trim();
+  return r.status === 0 && id ? id : undefined;
+}
+
+/** Every container, running or stopped, of any project, created from that image ID (`docker ps -a --filter ancestor=`). */
+export function containersUsing(q: DockerQuery, id: string): ContainerUse[] {
+  const r = q.run(["ps", "-a", "--no-trunc", "--filter", `ancestor=${id}`, "--format", '{{.Names}}\t{{.Label "com.docker.compose.project"}}']);
+  if (r.status !== 0) throw new Error("could not list containers (docker ps -a failed)");
+  return r.stdout.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const [name, project] = l.split("\t");
+    return { name: name ?? l, project: (project ?? "").trim() };
+  });
+}
+
+/** `name (compose project p)`, for messages and for `npm run clean`. */
+export const describeUse = (u: ContainerUse): string => `${u.name} (${u.project ? `compose project ${u.project}` : "not a compose project"})`;
+
+export type MoveCheck =
+  | { move: true; why: "new" | "unused" }
+  | { move: false; why: "same" }
+  | { move: false; why: "in-use"; users: ContainerUse[] };
+
+/**
+ * May `tag` be pointed at the image `newId`? Absent: yes. Already that image: nothing to move (always fine, so version-ref
+ * and ref8 tags of a pinned digest are idempotent). A different image that any container still uses: no. `newId` undefined
+ * (a build whose result is not known yet) counts as different. If Docker cannot be asked, the answer is no: the safe default.
+ */
+export function checkTagMove(q: DockerQuery, tag: string, newId: string | undefined): MoveCheck {
+  const current = imageId(q, tag);
+  if (current === undefined) return { move: true, why: "new" };
+  if (newId !== undefined && current === newId) return { move: false, why: "same" };
+  let users: ContainerUse[];
+  try { users = containersUsing(q, current); } catch { users = [{ name: "(unknown: docker ps -a failed)", project: "" }]; }
+  return users.length ? { move: false, why: "in-use", users } : { move: true, why: "unused" };
+}
+
+/** The sentence printed when a tag is left alone. */
+export function inUseMessage(tag: string, users: ContainerUse[], hint: string): string {
+  return `${tag} is used by ${users.map(describeUse).join(", ")}; not moving it. ${hint}`;
+}
+
+/** Hint for images:pull. The version-ref tag is unique to this pin, so a consumer can always reference that instead. */
+export const PULL_HINT = "Reference the version-ref tag (<name>:<version>-<ref8>) or the pinned digest instead, or stop those containers and re-run, or pass --force to move the tag anyway.";
+/** Hint for images:build. */
+export const BUILD_HINT = "Stop them first (this stack: npm run down), or pass --force to move the tag anyway; other projects keep running the old image either way.";
+
+/** images:build preflight: the tags a build is about to (re)write that are in use. Empty = go ahead. */
+export function buildTagConflicts(q: DockerQuery, tags: string[]): string[] {
+  const out: string[] = [];
+  for (const t of tags) {
+    const c = checkTagMove(q, t, undefined);
+    if (!c.move && c.why === "in-use") out.push(inUseMessage(t, c.users, BUILD_HINT));
+  }
+  return out;
+}

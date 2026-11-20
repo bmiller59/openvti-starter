@@ -14,6 +14,7 @@
 // --memory 8g / --cpus 4 / --no-limits (or BUILD_MEMORY / BUILD_CPUS / BUILD_LIMITS=0 in the environment or .env): the builds run on a capped,
 //            low-priority buildx builder, default half the engine's RAM (6g to 12g; memory-swap 2x when the host has swap), a quarter of the cores (at least 2 from 4 cores), pinned (scripts/lib/build-limits.ts).
 // --force    build despite the preflight refusal (free disk on Docker's data root < 10 GB, or engine memory < 4 GB); warnings never block.
+//            Also moves a tag that a container uses; without it such a build is refused up front (scripts/lib/image-guard.ts).
 // Labels: the same provenance labels the published images carry (pinned ref, upstream source, Dockerfile sha256,
 //         features, build-origin=local); `npm run images:verify --local` and `images:compare` read them (docs/VERIFY.md).
 // Tags: <image>:<ref8>, <image>:<version>-<ref8> and <image>:local (what compose defaults to); scripts/lib/image-tags.ts.
@@ -36,6 +37,7 @@ import { missingCheckoutMessage, missingRefMessage, parseBuildArgs } from "./lib
 import { confirm } from "./lib/prompt.js";
 import { MEDIATOR_BUILD_NOTICE, memoryWarning } from "./lib/tunnel.js";
 import { localRefs } from "./lib/image-tags.js";
+import { buildTagConflicts, realQuery } from "./lib/image-guard.js";
 import { pins } from "./pins.js";
 import { buildPreflight, ensureBuilder, limitedBuildArgv, limitsFromEnv, limitsNote, parseLimitFlags } from "./lib/build-limits.js";
 import { effectiveCores, realResources } from "./lib/host-resources.js";
@@ -90,8 +92,16 @@ async function buildMediator(): Promise<void> {
   const tags = localRefs({ name: m.image, version: m.version, ref: m.ref }, { local: true });
   const dockerfile = resolve("docker/mediator.Dockerfile");
   const labels = labelArgs(buildLabels("mediator", pins(), { dockerfileSha256: sha256(dockerfile) }));
+  guardTags(tags);
   console.log(`building ${tags.join(", ")} from ${m.repo} @ ${m.ref} (mediator ${m.version}, features ${m.features})`);
   await dockerBuild(["-f", dockerfile, "--build-arg", `MEDIATOR_REF=${m.ref}`, "--build-arg", `FEATURES=${m.features}`, ...labels, ...tags.flatMap((t) => ["-t", t]), resolve("docker")]);
+}
+
+/** Never rewrite a tag that a container (any project, running or stopped) uses, unless --force. Fails before the build starts. */
+function guardTags(tags: string[]): void {
+  if (limitFlags.force) return;
+  const c = buildTagConflicts(realQuery, tags);
+  if (c.length) die(`${c.join("\n")}\nNothing was built.`);
 }
 
 /** The VTA and VTC are built from a checkout of the upstream repository. Offer the clone, never do it unasked. */
@@ -127,6 +137,7 @@ async function buildOne(name: "vta" | "vtc"): Promise<void> {
   try {
     const tags = local ? [`${image}:local`] : localRefs({ name: image, version: vti[name].version, ref }, { local: true });
     const file = name === "vta" ? join(ctx, "Dockerfile") : resolve("docker/vtc.Dockerfile");
+    guardTags(tags);
     console.log(`building ${tags.join(", ")} from ${local ? `${repo} (working tree)` : `${tag} ${ref}`}`);
     // The VTA needs `tsp` for MODE=tunnel and the VTI Dockerfile's default feature list lacks it (pins.json vta.features).
     const features = name === "vta" && vti.vta.features ? ["--build-arg", `FEATURES=${vti.vta.features}`] : [];

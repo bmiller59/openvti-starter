@@ -6,6 +6,7 @@
 // There is deliberately no floating `latest`: a moving tag defeats pinning. The digest in pins.json is the verified reference.
 import { spawnSync } from "node:child_process";
 import type { ImageKind, ImageSpec } from "./images.js";
+import { checkTagMove, imageId, inUseMessage, PULL_HINT, realQuery, type DockerQuery } from "./image-guard.js";
 
 export const refShort = (ref: string): string => ref.slice(0, 8);
 
@@ -24,21 +25,34 @@ export function localRefs(spec: Pick<ImageSpec, "name" | "version" | "ref">, o: 
 /** Does a tag look like one of ours (`<ref8>` or `<version>-<ref8>`), pinned or not? Used to find superseded images. */
 export const isRefTag = (tag: string): boolean => /^(?:[0-9][0-9A-Za-z.+_]*-)?[0-9a-f]{8}$/.test(tag);
 
-export interface Tagger { tag(src: string, dst: string): { ok: boolean; stderr: string } }
+export interface Tagger {
+  tag(src: string, dst: string): { ok: boolean; stderr: string };
+  /** When set, a tag is only moved to a different image if no container (any project, running or stopped) uses the image it points to now. */
+  query?: DockerQuery;
+  /** Move tags even when in use (images:pull --force). */
+  force?: boolean;
+}
 
 /**
  * Give an already pulled (and, where a digest is pinned, digest-checked) image its canonical local tags.
  * Idempotent: `docker tag` re-pointing a canonical tag at the pinned image is the intent, so nothing is skipped. Returns
  * the refs that were tagged, or the first error.
  */
-export function tagPulled(spec: Pick<ImageSpec, "name" | "version" | "ref" | "kind">, source: string, d: Tagger): { ok: true; tagged: string[] } | { ok: false; kind: ImageKind; message: string } {
+export function tagPulled(spec: Pick<ImageSpec, "name" | "version" | "ref" | "kind">, source: string, d: Tagger): { ok: true; tagged: string[]; skipped: string[] } | { ok: false; kind: ImageKind; message: string } {
   const tagged: string[] = [];
+  const skipped: string[] = [];
+  const srcId = d.query ? imageId(d.query, source) : undefined;
   for (const dst of localRefs(spec)) {
+    if (d.query && !d.force) {
+      const c = checkTagMove(d.query, dst, srcId);
+      if (!c.move && c.why === "in-use") { skipped.push(inUseMessage(dst, c.users, PULL_HINT)); continue; }
+      if (!c.move && c.why === "same") { tagged.push(dst); continue; } // already points at this image: nothing to do
+    }
     const r = d.tag(source, dst);
     if (!r.ok) return { ok: false, kind: spec.kind, message: `could not tag ${source} as ${dst}: ${r.stderr.trim()}` };
     tagged.push(dst);
   }
-  return { ok: true, tagged };
+  return { ok: true, tagged, skipped };
 }
 
 export interface PullTagger extends Tagger { repoDigests(ref: string): string[] }
@@ -47,14 +61,15 @@ export interface PullTagger extends Tagger { repoDigests(ref: string): string[] 
  * images:pull's tagging step: a digest-pinned image is tagged only when it reports exactly the pinned digest, and an
  * unpinned (tag-only, unverified) pull is not tagged at all, so nothing unverified looks like the pin. Never tags :local.
  */
-export function tagVerified(spec: Pick<ImageSpec, "name" | "version" | "ref" | "kind" | "repo" | "digest">, ref: string, d: PullTagger): { ok: boolean; tagged: string[]; message?: string } {
+export function tagVerified(spec: Pick<ImageSpec, "name" | "version" | "ref" | "kind" | "repo" | "digest">, ref: string, d: PullTagger): { ok: boolean; tagged: string[]; skipped?: string[]; message?: string } {
   if (!spec.digest) return { ok: true, tagged: [], message: "not tagged locally (no pinned digest to verify against)" };
   if (!d.repoDigests(ref).includes(`${spec.repo}@${spec.digest}`)) return { ok: false, tagged: [], message: `${ref} does not report the pinned digest; not tagging it` };
   const t = tagPulled(spec, ref, d);
-  return t.ok ? { ok: true, tagged: t.tagged } : { ok: false, tagged: [], message: t.message };
+  return t.ok ? { ok: true, tagged: t.tagged, skipped: t.skipped } : { ok: false, tagged: [], message: t.message };
 }
 
 export const realTagger: PullTagger = {
+  query: realQuery,
   repoDigests: (ref) => spawnSync("docker", ["image", "inspect", ref, "--format", "{{range .RepoDigests}}{{println .}}{{end}}"], { encoding: "utf8", timeout: 30_000 }).stdout.trim().split("\n"),
   tag: (src, dst) => {
     const r = spawnSync("docker", ["tag", src, dst], { encoding: "utf8", timeout: 30_000 });

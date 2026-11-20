@@ -5,7 +5,8 @@
 //   npm run images:pull [vta|vtc|mediator|all] [--check] [--force] [--by-digest]
 //   all = vta + vtc + mediator (unlike images:build, pulling the mediator is cheap)
 //   --check  report what is present and what would be pulled; no network, nothing changed
-//   --force  pull even if the image is already here (refreshes a tag)
+//   --force  pull even if the image is already here (refreshes a tag), and move local tags even when a container uses them
+//            (without it a tag whose image any container uses is left alone and reported; the digest reference works regardless)
 //   --by-digest  pull only by the digest pinned in pins.json; refuse (pull nothing) if the pin records none.
 //            Without it, a pin with a digest is pulled by digest anyway, and one without falls back to the tag with a warning.
 //   After pulling, check it: npm run images:verify (docs/VERIFY.md)
@@ -64,7 +65,8 @@ const failed: string[] = [];
  * an image pulled before this existed (the mediator) gets them without a new pull. See tagVerified.
  */
 function tagLocally(kind: ImageKind, ref: string): boolean {
-  const t = tagVerified(specs[kind], ref, realTagger);
+  const t = tagVerified(specs[kind], ref, { ...realTagger, force: flags.has("--force") });
+  for (const m of t.skipped ?? []) console.warn(`${kind}: ${m}`); // left alone on purpose: not an error, the pinned digest reference is what up and images:verify use
   if (t.tagged.length) console.log(`${kind}: tagged ${t.tagged.join(", ")}`);
   else if (t.message) (t.ok ? console.warn : console.error)(`${kind}: ${t.message}.`);
   return t.ok;

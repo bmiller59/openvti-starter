@@ -45,7 +45,7 @@ const spec = (digest: string | null) => ({ ...specs.mediator, digest });
 test("tagPulled tags both forms and stops at the first failure", () => {
   const a = fake();
   const r = tagPulled(specs.mediator, "src", a.d);
-  assert.deepEqual(r, { ok: true, tagged: ["mediator-buildathon:e6e2c636", "mediator-buildathon:0.48.0-e6e2c636"] });
+  assert.deepEqual(r, { ok: true, tagged: ["mediator-buildathon:e6e2c636", "mediator-buildathon:0.48.0-e6e2c636"], skipped: [] });
   const b = fake({ failOn: "mediator-buildathon:0.48.0-e6e2c636" });
   const f = tagPulled(specs.mediator, "src", b.d);
   assert.equal(f.ok, false);
