@@ -20,7 +20,7 @@ const PEER_BLOCKED = /blocked by the mediator's DID size|a-didpeer2-applicant-bl
 
 /** Said of prebuilt images in the present tense as if participants could pull them. */
 const PREBUILT_DEFAULT = /prebuilt images? (?:are|is) the default|prebuilt by default|by default[^.\n]{0,60}prebuilt|prebuilt[^.\n]{0,40}by default|pulls? (?:the )?(?:prebuilt )?images? by default|pull by default|pulled by default|local builds? (?:is|are) the fallback|build(?:ing)? locally (?:is|as) the fallback|images:pull`? first|pulls them for you|pulled, else local|participants (?:can|just) pull|publish the pinned images, then check a clean laptop pulls/i;
-const FUTURE_OR_ABSENT = /not (?:yet |generally )?available|unavailable|images\.available|future|later|once (?:the )?packages|when (?:the )?packages|if (?:the )?(?:organisation|packages)|would|used to|no longer/i;
+const FUTURE_OR_ABSENT = /not (?:yet |generally )?available|unavailable|images\.available|future|later|once (?:the )?packages|when (?:the )?packages|if (?:the )?packages|would|used to|no longer/i;
 
 export const STALE_RULES: StaleRule[] = [
   { why: "the TSP pong comes back since the mediator 0.45.0 pin (Stage H)", re: /pong does not come back|no pong (?:ever )?comes back|the mediator pin refuses TSP 1\.0/i },

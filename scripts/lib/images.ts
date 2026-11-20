@@ -21,7 +21,7 @@ export type ImagesMode = "auto" | "local" | "registry";
 export const imagesAvailable = (p: Pins): boolean => p.images.available === true;
 
 /** Said wherever a prebuilt image is asked for while `available` is false. */
-export const UNAVAILABLE_NOTE = "Prebuilt images are not generally available yet (the organisation does not allow public packages), so the kit builds them locally. IMAGES=registry is for people whose account can pull the packages (docker login ghcr.io first); docs/IMAGES.md.";
+export const UNAVAILABLE_NOTE = "Prebuilt images are not generally available yet (pins.json images.available is false), so the kit builds them locally. IMAGES=registry is for trying the registry anyway if your account can pull the packages (docker login ghcr.io first); docs/IMAGES.md.";
 
 export interface ImageSpec {
   kind: ImageKind;
@@ -303,7 +303,7 @@ export function pullUnavailableMessage(specs: Record<ImageKind, ImageSpec>, kind
     ...kinds.map((k) => `  ${specs[k].buildCmd}`),
     "  (needs a checkout of the upstream VTI repository; see docs/IMAGES.md and docs/PINS.md#where-the-images-come-from)",
     "",
-    "If your account can already pull the organisation's packages (an organisation member), log in and ask for them explicitly:",
+    "If your account can already pull the packages, log in and ask for them explicitly:",
     "  docker login ghcr.io",
     "  IMAGES=registry npm run images:pull && IMAGES=registry npm run up",
     "Nothing was pulled.",

@@ -57,7 +57,7 @@ test("while prebuilt images are unavailable, 'prebuilt by default' wording is st
 test("clearly future or absent statements about prebuilt images are allowed", () => {
   assert.deepEqual(staleHits("Once images.available is true, prebuilt images are the default.", false), []);
   assert.deepEqual(staleHits("Prebuilt by default is the future design; they are not yet available.", false), []);
-  assert.deepEqual(staleHits("If the organisation ever allows it, `npm run up` would pull by default.", false), []);
+  assert.deepEqual(staleHits("If the packages ever become public, `npm run up` would pull by default.", false), []);
 });
 
 test("when prebuilt images are available, the unavailable rule stops and the old fallback rule applies again", () => {
