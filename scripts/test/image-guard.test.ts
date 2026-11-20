@@ -11,7 +11,7 @@ function fakeQuery(tags: Record<string, string>, containers: { name: string; pro
   const q: DockerQuery = {
     run: (args) => {
       calls.push(args);
-      if (args[0] === "image" && args[1] === "inspect") { const id = tags[args[2]!]; return id ? { status: 0, stdout: id + "\n" } : { status: 1, stdout: "" }; }
+      if (args[0] === "image" && args[1] === "inspect") { const id = tags[args[2]!]; return id ? { status: 0, stdout: id + "\n" } : { status: 1, stdout: "", stderr: "Error: No such image: " + args[2] }; }
       if (args[0] === "ps") {
         const id = args.find((a) => a.startsWith("ancestor="))!.slice(9);
         return { status: 0, stdout: containers.filter((c) => c.image === id).map((c) => `${c.name}\t${c.project ?? ""}`).join("\n") };
@@ -36,6 +36,11 @@ test("imageId and containersUsing only run read-only docker queries (image inspe
   const { q, calls } = fakeQuery({ x: OLD }, [{ name: "a-vta-1", project: "a", image: OLD }]);
   assert.equal(imageId(q, "x"), OLD);
   assert.equal(imageId(q, "nope"), undefined);
+  const down: DockerQuery = { run: () => ({ status: 1, stdout: "", stderr: "Cannot connect to the Docker daemon" }) };
+  assert.throws(() => imageId(down, "x"), /could not inspect/);
+  assert.equal(checkTagMove(down, "x", NEW).move, false); // daemon down on inspect: fail closed, not "new"
+  const timeout: DockerQuery = { run: () => ({ status: null, stdout: "" }) };
+  assert.equal(checkTagMove(timeout, "x", NEW).move, false);
   assert.deepEqual(containersUsing(q, OLD), [{ name: "a-vta-1", project: "a" }]);
   for (const c of calls) assert.ok((c[0] === "image" && c[1] === "inspect") || (c[0] === "ps" && c.includes("-a")), c.join(" "));
 });

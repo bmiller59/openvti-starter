@@ -41,7 +41,8 @@ export interface Tagger {
 export function tagPulled(spec: Pick<ImageSpec, "name" | "version" | "ref" | "kind">, source: string, d: Tagger): { ok: true; tagged: string[]; skipped: string[] } | { ok: false; kind: ImageKind; message: string } {
   const tagged: string[] = [];
   const skipped: string[] = [];
-  const srcId = d.query ? imageId(d.query, source) : undefined;
+  let srcId: string | undefined;
+  try { srcId = d.query ? imageId(d.query, source) : undefined; } catch { srcId = undefined; } // unknown source id: every existing tag counts as a move
   for (const dst of localRefs(spec)) {
     if (d.query && !d.force) {
       const c = checkTagMove(d.query, dst, srcId);

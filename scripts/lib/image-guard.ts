@@ -4,22 +4,30 @@
 // the only thing that talks to Docker, and only read-only (`docker image inspect`, `docker ps -a`).
 import { spawnSync } from "node:child_process";
 
-export interface DockerQuery { run(args: string[]): { status: number | null; stdout: string } }
+export interface DockerQuery { run(args: string[]): { status: number | null; stdout: string; stderr?: string } }
 
 export const realQuery: DockerQuery = {
   run: (args) => {
     const r = spawnSync("docker", args, { encoding: "utf8", timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
-    return { status: r.status, stdout: r.stdout ?? "" };
+    return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
   },
 };
 
 export interface ContainerUse { name: string; /** compose project, "" when it was not started by compose */ project: string }
 
-/** The image ID (sha256:...) a reference points to now, or undefined when it does not exist (or Docker cannot be asked). */
+/** Thrown when Docker could not be asked (daemon down, timeout): callers fail closed. */
+export class DockerUnavailable extends Error {}
+
+/**
+ * The image ID (sha256:...) a reference points to now, or undefined when it does not exist. Only a genuine "No such image"
+ * answer means absent; any other failure (daemon down, timeout) throws DockerUnavailable so a tag is never moved blind.
+ */
 export function imageId(q: DockerQuery, ref: string): string | undefined {
   const r = q.run(["image", "inspect", ref, "--format", "{{.Id}}"]);
   const id = r.stdout.trim();
-  return r.status === 0 && id ? id : undefined;
+  if (r.status === 0 && id) return id;
+  if (r.status === 1 && /no such (image|object)/i.test(r.stderr ?? "")) return undefined;
+  throw new DockerUnavailable(`could not inspect ${ref} (docker image inspect failed: ${(r.stderr ?? "").trim() || `status ${r.status}`})`);
 }
 
 /** Every container, running or stopped, of any project, created from that image ID (`docker ps -a --filter ancestor=`). */
@@ -46,7 +54,8 @@ export type MoveCheck =
  * (a build whose result is not known yet) counts as different. If Docker cannot be asked, the answer is no: the safe default.
  */
 export function checkTagMove(q: DockerQuery, tag: string, newId: string | undefined): MoveCheck {
-  const current = imageId(q, tag);
+  let current: string | undefined;
+  try { current = imageId(q, tag); } catch { return { move: false, why: "in-use", users: [{ name: "(unknown: docker image inspect failed)", project: "" }] }; }
   if (current === undefined) return { move: true, why: "new" };
   if (newId !== undefined && current === newId) return { move: false, why: "same" };
   let users: ContainerUse[];
