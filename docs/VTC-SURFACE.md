@@ -74,7 +74,7 @@ admin each call a set of **safe read** tasks and compares the outcome with the m
 The rows live in `scripts/lib/live-matrix.ts`; a unit test (`scripts/test/roles-matrix-doc.test.ts`, part of `npm test`) checks that every
 probed task is named in this file. Calls are paced: the stranger and the applicant share the anonymous budget (burst 10, then
 one per 5 s), so they are spaced about 5 s apart after a burst of seven; the member and the admin run at about two calls a second.
-It takes about a minute. Without the stack it prints `SKIP` and exits 0 (`REQUIRE_STACK=1` makes that a failure).
+If the VTC still answers 429 (for example right after `e2e`), `test:roles` waits the `retryAfterSecs` the 429 body carries and retries, at most 3 times a call and 120 s in all, logging each wait; it never retries any other error. It takes about a minute. Without the stack it prints `SKIP` and exits 0 (`REQUIRE_STACK=1` makes that a failure).
 Observed 2026-10-29 against the local stack (VTC 0.15.0): 36 of 36 probes matched.
 
 Observed while building it, not in the table above: the member-portal sign-in routes (`POST /v1/member/wallet/auth/challenge`

@@ -3,23 +3,26 @@
 // Probes safe READ tasks as four callers and asserts who-can-call-what as written in docs/VTC-SURFACE.md:
 //   stranger (fresh did:key), applicant (pending request), member (approved), admin (.vta/admin.json).
 // Mutations: one throwaway applicant applies, the admin approves it, and it leaves at the end (the community keeps a
-// tombstoned entry for it). Your own app identity in .env is not touched. Calls are paced to the admission budgets.
+// tombstoned entry for it). Your own app identity in .env is not touched. Calls are paced to the admission budgets; a 429 is retried per its retryAfterSecs (max 3 retries a call, 120 s in all), never otherwise.
 import "./lib/cli.js";
 import { TT, newIdentity, type Identity } from "@starter/vta-client";
 import { TrustTaskError, VtcClient, pickCriterion } from "@starter/vtc-client";
 import { env, loadAdmin, vtcUrl } from "./env.js";
 import { MATRIX, type Persona } from "./lib/live-matrix.js";
+import { RateLimitBudget, withRateLimitRetry } from "./lib/rate-limit.js";
 import { anonymousPacer, knownPacer, skip, stackProblem } from "./lib/live.js";
 
 const problem = await stackProblem();
 if (problem) skip("test:roles", problem);
 
 const url = vtcUrl();
+const rl = new RateLimitBudget();
+const retrying = <T>(label: string, fn: () => Promise<T>) => withRateLimitRetry(label, fn, rl);
 const connect = (id: Identity) => VtcClient.connect(url, id, undefined, env("VTC_DID"));
 
 type Outcome = "ok" | "notFound" | "refused" | `other: ${string}`;
 async function probe(vtc: VtcClient, task: string): Promise<Outcome> {
-  try { await vtc.call(`${TT}/${task}`, {}); return "ok"; } catch (e) {
+  try { await retrying(task, () => vtc.call(`${TT}/${task}`, {})); return "ok"; } catch (e) {
     if (!(e instanceof TrustTaskError)) throw e;
     const p = (e.body as any)?.payload ?? {};
     const text = `${p.code ?? ""} ${p.message ?? ""}`;
@@ -58,17 +61,17 @@ try {
   console.log("stranger (fresh did:key, no request)");
   await runPersona("stranger", newIdentity(), anon);
 
-  const m = await applicantClient.manifest();
+  const m = await retrying("manifest", () => applicantClient.manifest());
   const crit = pickCriterion(m);
   const wanted = m.requestedAttributes ?? [];
   const attributes = wanted.some((a) => a.type === "name.display") ? [{ type: "name.display", value: "roles-test" }] : [];
   await anon.next();
-  requestId = (await applicantClient.submitJoin({ criterion: crit?.requirementsDigest, attributes })).requestId;
+  requestId = (await retrying("join-requests/submit", () => applicantClient.submitJoin({ criterion: crit?.requirementsDigest, attributes }))).requestId;
   console.log("applicant (pending request)");
   await runPersona("applicant", applicant, anon);
 
   await known.next();
-  await adminClient.decideJoin(requestId, "approved");
+  await retrying("join-requests/decide", () => adminClient.decideJoin(requestId!, "approved"));
   joined = true;
   console.log("member (approved)");
   await runPersona("member", applicant, known);
@@ -84,4 +87,5 @@ if (failures.length) {
   console.error(`\ntest:roles FAILED: ${failures.length} of ${checks} probes differ from docs/VTC-SURFACE.md\n  ${failures.join("\n  ")}`);
   process.exit(1);
 }
+if (rl.retries) console.log(`\n(${rl.retries} rate-limited call(s) retried, ${(rl.spentMs / 1000).toFixed(0)}s waited)`);
 console.log(`\ntest:roles ok: ${checks} probes match docs/VTC-SURFACE.md`);
