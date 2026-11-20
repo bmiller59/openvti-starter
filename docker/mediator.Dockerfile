@@ -2,7 +2,7 @@
 # from the affinidi-messaging-mediator repo at the ref pinned in pins.json (mediator.ref), built with DIDComm and TSP.
 #
 #   npm run images:build mediator        (checks memory, then runs this file)
-#   docker build -f docker/mediator.Dockerfile -t mediator-buildathon:local docker
+#   docker build -f docker/mediator.Dockerfile -t mediator:local docker
 #
 # Heavy: a cold build takes about 12 minutes on a 12-core desktop (docs/IMAGES.md#build-requirements). The upstream estimate is 8 GB
 # of RAM; one observed build stayed within about 1.5 GB above idle. Run it under `nice -n 10`.

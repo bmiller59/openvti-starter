@@ -73,12 +73,27 @@ export const PULL_HINT = "Reference the version-ref tag (<name>:<version>-<ref8>
 /** Hint for images:build. */
 export const BUILD_HINT = "Stop them first (this stack: npm run down), or pass --force to move the tag anyway; other projects keep running the old image either way.";
 
+/** Labels the kit puts on every image it builds or publishes (scripts/lib/images.ts buildLabels, images.yml). */
+export const KIT_LABELS = ["org.buildathon.build-origin", "org.buildathon.pinned-ref", "org.buildathon.vti-ref", "org.buildathon.mediator-ref"] as const;
+
+/** Does the image carry any kit label? Unknown (Docker cannot be asked) counts as not ours: the safe answer when deciding what to overwrite or remove. */
+export function hasKitLabels(labels: Record<string, string> | undefined): boolean {
+  return !!labels && KIT_LABELS.some((k) => !!labels[k]);
+}
+export function isKitImage(q: DockerQuery, ref: string): boolean {
+  const r = q.run(["image", "inspect", ref, "--format", "{{json .Config.Labels}}"]);
+  if (r.status !== 0) return false;
+  try { return hasKitLabels(JSON.parse(r.stdout.trim() || "null") as Record<string, string> | null ?? undefined); } catch { return false; }
+}
+
 /** images:build preflight: the tags a build is about to (re)write that are in use. Empty = go ahead. */
 export function buildTagConflicts(q: DockerQuery, tags: string[]): string[] {
   const out: string[] = [];
   for (const t of tags) {
     const c = checkTagMove(q, t, undefined);
     if (!c.move && c.why === "in-use") out.push(inUseMessage(t, c.users, BUILD_HINT));
+    if (c.move && c.why === "new") continue;
+    if (!isKitImage(q, t)) out.push(`${t} exists but was not built by this kit (it has no org.buildathon.* labels: another project's image of the same name?); not overwriting it. Pass --force to move the tag anyway.`);
   }
   return out;
 }

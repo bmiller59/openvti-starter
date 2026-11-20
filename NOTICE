@@ -10,14 +10,14 @@ templates/inbox-verifier follows the usage documented in
 dtgwg-trust-tasks-tf (Apache-2.0): GETTING-STARTED.md and trust-tasks-ts/README.md.
 
 Container images. The images this project builds and publishes at ghcr.io/bmiller59
-(vta-buildathon, vtc-buildathon, mediator-buildathon; built by .github/workflows/images.yml, or
+(vta, vtc, mediator; built by .github/workflows/images.yml, or
 locally as <name>:local) are built, unmodified, from the upstream sources at the refs pinned in
 pins.json, and are distributed under the licences of that software:
 
-- vta-buildathon and vtc-buildathon: OpenVTC/verifiable-trust-infrastructure
+- vta and vtc: OpenVTC/verifiable-trust-infrastructure
   (https://github.com/OpenVTC/verifiable-trust-infrastructure, Apache-2.0), at commit
   26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f (vta-service-v0.72.0, vtc-service-v0.20.0).
-- mediator-buildathon: affinidi-messaging-mediator
+- mediator: affinidi-messaging-mediator
   (https://github.com/affinidi/affinidi-messaging-mediator, Apache-2.0, with its own NOTICE.txt), at
   commit e6e2c63654bb43bb7feb732834702cd940b2bcce (v0.48.0).
 

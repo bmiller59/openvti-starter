@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canonicalTags, isRefTag, localRefs, refShort, tagPulled, tagVerified, versionTag, type PullTagger } from "../lib/image-tags.js";
+import { canonicalTags, isRefTag, legacyName, localRefs, refShort, tagPulled, tagVerified, versionTag, type PullTagger } from "../lib/image-tags.js";
 import { imageSpecs } from "../lib/images.js";
 import { pinnedImages } from "../lib/clean.js";
 import { pins } from "../pins.js";
@@ -16,9 +16,9 @@ test("tags derive from pins.json: <ref8> and <version>-<ref8>", () => {
 });
 
 test("localRefs adds :local for builds only, and never latest", () => {
-  const s = { name: "vta-buildathon", version: "0.72.0", ref: "26d0da81a1ae" };
-  assert.deepEqual(localRefs(s), ["vta-buildathon:26d0da81", "vta-buildathon:0.72.0-26d0da81"]);
-  assert.deepEqual(localRefs(s, { local: true }), ["vta-buildathon:26d0da81", "vta-buildathon:0.72.0-26d0da81", "vta-buildathon:local"]);
+  const s = { name: "vta", version: "0.72.0", ref: "26d0da81a1ae" };
+  assert.deepEqual(localRefs(s), ["vta:26d0da81", "vta:0.72.0-26d0da81"]);
+  assert.deepEqual(localRefs(s, { local: true }), ["vta:26d0da81", "vta:0.72.0-26d0da81", "vta:local"]);
   assert.ok(!localRefs(s, { local: true }).some((r) => r.endsWith(":latest")));
 });
 
@@ -45,11 +45,11 @@ const spec = (digest: string | null) => ({ ...specs.mediator, digest });
 test("tagPulled tags both forms and stops at the first failure", () => {
   const a = fake();
   const r = tagPulled(specs.mediator, "src", a.d);
-  assert.deepEqual(r, { ok: true, tagged: ["mediator-buildathon:e6e2c636", "mediator-buildathon:0.48.0-e6e2c636"], skipped: [] });
-  const b = fake({ failOn: "mediator-buildathon:0.48.0-e6e2c636" });
+  assert.deepEqual(r, { ok: true, tagged: ["mediator:e6e2c636", "mediator:0.48.0-e6e2c636"], skipped: [] });
+  const b = fake({ failOn: "mediator:0.48.0-e6e2c636" });
   const f = tagPulled(specs.mediator, "src", b.d);
   assert.equal(f.ok, false);
-  assert.match((f as { message: string }).message, /could not tag src as mediator-buildathon:0\.48\.0-e6e2c636: boom/);
+  assert.match((f as { message: string }).message, /could not tag src as mediator:0\.48\.0-e6e2c636: boom/);
 });
 
 test("tagVerified tags only when the pinned digest is reported, never :local", () => {
@@ -71,4 +71,9 @@ test("tagVerified leaves an unpinned (tag-only) pull untagged", () => {
   assert.equal(r.ok, true);
   assert.equal(f.calls.length, 0);
   assert.match(r.message ?? "", /no pinned digest/);
+});
+
+test("image names are the short names, and the legacy names derive from them in one place", () => {
+  for (const k of IMAGE_ORDER) { assert.equal(specs[k].name, k); assert.equal(specs[k].local, `${k}:local`); assert.equal(legacyName(k), `${k}-buildathon`); }
+  assert.equal(specs.vta.repo, "ghcr.io/bmiller59/vta");
 });

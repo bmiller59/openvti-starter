@@ -4,7 +4,7 @@
   "vti": {
     "repo": "https://github.com/OpenVTC/verifiable-trust-infrastructure",
     "vta": {
-      "image": "vta-buildathon",
+      "image": "vta",
       "tag": "vta-service-v0.72.0",
       "ref": "26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f",
       "version": "0.72.0",
@@ -13,7 +13,7 @@
       "featuresNote": "The VTI Dockerfile default has no `tsp`, and the VTA then refuses services.tsp = true (MODE=tunnel). images:build passes this list as the FEATURES build arg for every VTA image, so one image serves all modes."
     },
     "vtc": {
-      "image": "vtc-buildathon",
+      "image": "vtc",
       "tag": "vtc-service-v0.20.0",
       "ref": "26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f",
       "version": "0.20.0",
@@ -26,7 +26,7 @@
   "messaging": {
     "pinnedOn": "2026-10-29",
     "mediator": {
-      "image": "mediator-buildathon",
+      "image": "mediator",
       "repo": "https://github.com/affinidi/affinidi-messaging-mediator",
       "ref": "e6e2c63654bb43bb7feb732834702cd940b2bcce",
       "version": "0.48.0",

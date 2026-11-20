@@ -8,6 +8,14 @@ import { spawnSync } from "node:child_process";
 import type { ImageKind, ImageSpec } from "./images.js";
 import { checkTagMove, imageId, inUseMessage, PULL_HINT, realQuery, type DockerQuery } from "./image-guard.js";
 
+/**
+ * The image names before the rename of 2026-11 (`vta-buildathon`, ...). The CURRENT names are pins.json `image` (images.<kind> in
+ * docker-compose.yml defaults are checked against them by a test), so the next rename is those fields. Old names stay working
+ * locally and are only ever offered for removal by `npm run clean -- images` (docs/IMAGES.md, "Renamed images").
+ */
+export const LEGACY_NAME_SUFFIX = "-buildathon";
+export const legacyName = (name: string): string => `${name}${LEGACY_NAME_SUFFIX}`;
+
 export const refShort = (ref: string): string => ref.slice(0, 8);
 
 /** `<version>-<ref8>`. */

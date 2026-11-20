@@ -31,8 +31,8 @@ flowchart LR
     NODE["inbox-verifier<br/>(Node, :4000)"]
     BROWSER["Browser page<br/>web-vta-app / community-dashboard<br/>(Vite dev server :5173)"]
     subgraph DOCKER["docker compose"]
-      VTA["VTA :8100<br/>vta-buildathon image"]
-      VTC["VTC :8200<br/>vtc-buildathon image<br/>(shares the VTA's network)"]
+      VTA["VTA :8100<br/>vta image"]
+      VTC["VTC :8200<br/>vtc image<br/>(shares the VTA's network)"]
       MED["mediator :7037<br/>(MODE=tunnel only)"]
     end
     TSP["tsp:ping, tsp:listen,<br/>templates/tsp-ping"]

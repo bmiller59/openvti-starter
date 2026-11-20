@@ -4,7 +4,7 @@
 //   npm run clean:dry                  same as the first line (--dry-run is accepted as an alias)
 //   npm run clean -- images            only some scopes: `--only images,cache` or bare words
 // Scopes:
-//   images    vta/vtc/mediator-buildathon:<8 hex> tags that are not the ref pinned in pins.json, one tag at a time (docker image rm).
+//   images    vta/vtc/mediator:<8 hex> tags that are not the ref pinned in pins.json, one tag at a time (docker image rm).
 //             Keeps :local and the pinned tag; refuses an image a running container uses. ~180-200 MB each.
 //   cache     the resource-limited buildx builders (buildathon2-*) and their cache volumes: the non-current ones are removed.
 //             The current builder is kept (--prune-current empties its cache, --remove-current deletes it). Observed ~12 GB.

@@ -170,7 +170,7 @@ export const pinnedImages = (p: Pins): PinnedImage[] => [
   { name: p.messaging.mediator.image, keep: canonicalTags(p.messaging.mediator) },
 ];
 
-/** `vta-buildathon` or `ghcr.io/org/vta-buildathon` (a pulled copy of the same image) -> the pinned entry; anything else -> undefined. */
+/** `vta` or `ghcr.io/org/vta` (a pulled copy of the same image) -> the pinned entry; anything else -> undefined. */
 const pinnedFor = (repo: string, pinned: PinnedImage[]) => pinned.find((p) => repo === p.name || repo.endsWith("/" + p.name));
 
 /** Docker shows 12-char IDs in listings and full `sha256:` ones in inspect output. */

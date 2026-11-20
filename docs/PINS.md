@@ -57,14 +57,14 @@ One ref: the 0.72 release commit is both `vta-service-v0.72.0` and `vtc-service-
 
 | Image | Tag | Ref | Why |
 |---|---|---|---|
-| `vta-buildathon` | `vta-service-v0.72.0` | `26d0da81` | Advanced from 0.65.0 on 2026-11-04. **Not yet re-validated end to end, and not what the Farm ran when last observed (0.65.0).** |
-| `vtc-buildathon` | `vtc-service-v0.20.0` | `26d0da81` | The VTC cut from the same release commit as the VTA. Previously 0.15.0 (`93d36996`), which a Farm VTC ran when observed. |
+| `vta` | `vta-service-v0.72.0` | `26d0da81` | Advanced from 0.65.0 on 2026-11-04. **Not yet re-validated end to end, and not what the Farm ran when last observed (0.65.0).** |
+| `vtc` | `vtc-service-v0.20.0` | `26d0da81` | The VTC cut from the same release commit as the VTA. Previously 0.15.0 (`93d36996`), which a Farm VTC ran when observed. |
 
 For `MODE=tunnel` ([MODES.md](MODES.md)) there are more pins, in `pins.json` under `messaging`:
 
 | What | Pin | Why |
 |---|---|---|
-| `mediator-buildathon` | affinidi-messaging-mediator `e6e2c636` (tag v0.48.0; pins.json is authoritative), features `tsp,secrets-aws` | The mediator release the VTA 0.72.0 lockfile names (was v0.45.0 `7e378c03` for VTA 0.65.0); it reads TSP 1.0 like the VTA and VTC (the earlier pin, affinidi-tdk-rs `55580615` / v0.33.1, read only Rev 3); built from `docker/mediator.Dockerfile` (heavy: see MODES.md). |
+| `mediator` | affinidi-messaging-mediator `e6e2c636` (tag v0.48.0; pins.json is authoritative), features `tsp,secrets-aws` | The mediator release the VTA 0.72.0 lockfile names (was v0.45.0 `7e378c03` for VTA 0.65.0); it reads TSP 1.0 like the VTA and VTC (the earlier pin, affinidi-tdk-rs `55580615` / v0.33.1, read only Rev 3); built from `docker/mediator.Dockerfile` (heavy: see MODES.md). |
 | `redis` | `7.4.6-alpine` | In-memory queue store for the mediator. |
 | `cloudflared` | validated 2024.6.1 (host binary, not pinned) | Quick tunnels. |
 | VTA build features | `setup,rest,didcomm,tsp,cli-synthesis,aws-secrets,webvh` | The VTI default has no `tsp`; the VTA then refuses `services.tsp = true`. |

@@ -227,7 +227,7 @@ test("plan step: one image, dry run, registry override; bad values are refused",
   assert.equal(JSON.parse(one.out.matrix!).length, 2);
   assert.equal(one.out.push, "false");
   assert.equal(one.out.registry, "ghcr.io/some-org");
-  assert.match(JSON.parse(one.out.kinds!)[0].repo, /^ghcr\.io\/some-org\/mediator-buildathon$/);
+  assert.match(JSON.parse(one.out.kinds!)[0].repo, /^ghcr\.io\/some-org\/mediator$/);
   for (const bad of [{ SELECT: "everything" }, { PUSH: "maybe" }, { REGISTRY_INPUT: "docker.io/x" }, { REGISTRY_INPUT: "ghcr.io/Upper" }, { REGISTRY_INPUT: "ghcr.io/a b" }]) {
     assert.notEqual(plan(bad).status, 0, JSON.stringify(bad));
   }

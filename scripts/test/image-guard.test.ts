@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildTagConflicts, checkTagMove, containersUsing, imageId, type DockerQuery } from "../lib/image-guard.js";
+import { buildTagConflicts, checkTagMove, containersUsing, hasKitLabels, imageId, KIT_LABELS, type DockerQuery } from "../lib/image-guard.js";
 import { tagPulled, tagVerified, type PullTagger } from "../lib/image-tags.js";
 import { imageSpecs } from "../lib/images.js";
 import { pins } from "../pins.js";
 
 // A fake Docker: tags map to image ids; containers say which image id they run. Only read-only queries are answered.
-function fakeQuery(tags: Record<string, string>, containers: { name: string; project?: string; image: string; running?: boolean }[] = []) {
+function fakeQuery(tags: Record<string, string>, containers: { name: string; project?: string; image: string; running?: boolean }[] = [], labels: Record<string, Record<string, string>> = {}) {
   const calls: string[][] = [];
   const q: DockerQuery = {
     run: (args) => {
       calls.push(args);
+      if (args[0] === "image" && args[1] === "inspect" && args[4] === "{{json .Config.Labels}}") return tags[args[2]!] ? { status: 0, stdout: JSON.stringify(labels[args[2]!] ?? null) } : { status: 1, stdout: "" };
       if (args[0] === "image" && args[1] === "inspect") { const id = tags[args[2]!]; return id ? { status: 0, stdout: id + "\n" } : { status: 1, stdout: "", stderr: "Error: No such image: " + args[2] }; }
       if (args[0] === "ps") {
         const id = args.find((a) => a.startsWith("ancestor="))!.slice(9);
@@ -116,8 +117,24 @@ test("tagVerified: a skipped tag is a result, not a failure (the digest referenc
 });
 
 test("images:build preflight lists in-use tags and ignores free or absent ones", () => {
-  const { q } = fakeQuery({ "n:local": OLD, "n:free": NEW }, [{ name: "x-vta-1", project: "x", image: OLD }]);
+  const K = { "org.buildathon.build-origin": "local" };
+  const { q } = fakeQuery({ "n:local": OLD, "n:free": NEW }, [{ name: "x-vta-1", project: "x", image: OLD }], { "n:local": K, "n:free": K });
   const c = buildTagConflicts(q, ["n:local", "n:free", "n:absent"]);
   assert.equal(c.length, 1);
   assert.match(c[0]!, /n:local is used by x-vta-1 \(compose project x\).*--force/);
+});
+
+test("images:build refuses to move a tag whose image the kit did not build (no kit labels), unless forced upstream", () => {
+  const K = { "org.buildathon.pinned-ref": "26d0da81" };
+  const { q } = fakeQuery({ "vta:local": OLD, "vtc:local": NEW, "mediator:local": "sha256:" + "3".repeat(64) }, [], { "vta:local": { maintainer: "someone else" }, "vtc:local": K });
+  const c = buildTagConflicts(q, ["vta:local", "vtc:local", "mediator:local", "vta:absent"]);
+  assert.equal(c.length, 2); // foreign vta:local and mediator:local (no labels at all); the kit's own vtc:local and the absent tag are fine
+  assert.match(c[0]!, /vta:local exists but was not built by this kit.*--force/);
+  assert.match(c[1]!, /mediator:local exists but was not built/);
+});
+
+test("hasKitLabels recognises each label the kit applies", () => {
+  for (const k of KIT_LABELS) assert.equal(hasKitLabels({ [k]: "x" }), true, k);
+  assert.equal(hasKitLabels({ "org.opencontainers.image.title": "x" }), false);
+  assert.equal(hasKitLabels(undefined), false);
 });

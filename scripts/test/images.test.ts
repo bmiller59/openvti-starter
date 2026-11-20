@@ -45,11 +45,11 @@ test("pins.json images section: registry, platforms, digests null or sha256", ()
 test("specs: names and tags come from the existing pins, tag is the short ref", () => {
   const s = imageSpecs(bare());
   const p = pins();
-  assert.equal(s.vta.name, "vta-buildathon");
-  assert.equal(s.vta.tagged, `${p.images.registry}/vta-buildathon:${p.vti.vta.ref.slice(0, 8)}`);
-  assert.equal(s.vtc.tagged, `${p.images.registry}/vtc-buildathon:${p.vti.vtc.ref.slice(0, 8)}`);
-  assert.equal(s.mediator.tagged, `${p.images.registry}/mediator-buildathon:${p.messaging.mediator.ref.slice(0, 8)}`);
-  assert.equal(s.vta.local, "vta-buildathon:local");
+  assert.equal(s.vta.name, "vta");
+  assert.equal(s.vta.tagged, `${p.images.registry}/vta:${p.vti.vta.ref.slice(0, 8)}`);
+  assert.equal(s.vtc.tagged, `${p.images.registry}/vtc:${p.vti.vtc.ref.slice(0, 8)}`);
+  assert.equal(s.mediator.tagged, `${p.images.registry}/mediator:${p.messaging.mediator.ref.slice(0, 8)}`);
+  assert.equal(s.vta.local, "vta:local");
   assert.equal(s.vta.pinned, s.vta.tagged, "no digest recorded: the tag");
   assert.equal(s.vta.refLabel, "org.buildathon.vti-ref");
   assert.equal(s.mediator.refLabel, "org.buildathon.mediator-ref");
@@ -68,7 +68,7 @@ test("registry override: IMAGE_REGISTRY replaces pins, is validated, trailing sl
   assert.equal(registryBase(p, ""), p.images.registry);
   assert.equal(registryBase(p, undefined), p.images.registry);
   for (const bad of ["https://ghcr.io/x", "GHCR.io/Org", "ghcr.io/org name", "ghcr.io//x"]) assert.throws(() => registryBase(p, bad), /IMAGE_REGISTRY/);
-  assert.equal(imageSpecs(p, "reg.example/x").vtc.repo, "reg.example/x/vtc-buildathon");
+  assert.equal(imageSpecs(p, "reg.example/x").vtc.repo, "reg.example/x/vtc");
 });
 
 test("IMAGES mode parsing", () => {
@@ -219,10 +219,10 @@ test("pins:check rows: a registry image without labels is drift, a local one onl
   const b = bare(); // the real pins.json records digests; this row is about the case where none is recorded
   const s = imageSpecs(b);
   assert.deepEqual(checkImageLabels(s.vtc, b, "r", "registry", {}, []).map((r) => r.ok), [false, null]);
-  assert.deepEqual(checkImageLabels(s.vtc, b, "vtc-buildathon:local", "local", {}, []).map((r) => r.ok), [null]);
+  assert.deepEqual(checkImageLabels(s.vtc, b, "vtc:local", "local", {}, []).map((r) => r.ok), [null]);
   const m = checkImageLabels(s.mediator, b, "m", "registry", { "org.buildathon.mediator-ref": b.messaging.mediator.ref }, []);
   assert.deepEqual(m.map((r) => r.ok), [true, null]);
-  const vtaLocal = checkImageLabels(s.vta, b, "vta-buildathon:local", "local", {}, []);
+  const vtaLocal = checkImageLabels(s.vta, b, "vta:local", "local", {}, []);
   assert.deepEqual(vtaLocal.map((r) => r.ok), [null, null]);
 });
 

@@ -24,7 +24,7 @@ export function archWarning(image: string, imageArch: string, dockerArch: string
     : `${image} was built for ${imageArch} but Docker here runs ${dockerArch}: it will not start (or will crawl under emulation). Build it on this machine instead: npm run setup.`;
 }
 
-/** Tags a `docker load` reports: lines like `Loaded image: vta-buildathon:local`. */
+/** Tags a `docker load` reports: lines like `Loaded image: vta:local`. */
 export function loadedRefs(output: string): string[] {
   return [...output.matchAll(/^Loaded image:\s*(\S+)\s*$/gm)].map((m) => m[1]!);
 }

@@ -66,7 +66,7 @@ async function tunnelUp(): Promise<void> {
   if (!have("cloudflared")) die("MODE=tunnel needs the `cloudflared` binary on PATH (quick tunnels, no account). Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/ . Validated with " + p.messaging.cloudflared.validated + ".");
   prepareImages(["vta", ...(withVtc() ? ["vtc" as const] : []), "mediator"]);
   const wantVtc = withVtc();
-  const features = imageLabel(process.env.VTA_IMAGE ?? "vta-buildathon:local", "org.buildathon.vta-features");
+  const features = imageLabel(process.env.VTA_IMAGE ?? "vta:local", "org.buildathon.vta-features");
   if (features !== undefined && features !== "" && !features.split(",").includes("tsp")) {
     die(`the VTA image was built without \`tsp\` (features: ${features}); MODE=tunnel needs it. Rebuild: npm run images:build vta.`);
   }

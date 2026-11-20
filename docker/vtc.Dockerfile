@@ -1,7 +1,7 @@
 # Builds the VTC (`vtc` binary) from a verifiable-trust-infrastructure checkout.
 # The VTA image does NOT contain it: the VTI Dockerfile builds only `vta-service`.
 #
-#   docker build -f docker/vtc.Dockerfile -t vtc-buildathon:local /path/to/verifiable-trust-infrastructure
+#   docker build -f docker/vtc.Dockerfile -t vtc:local /path/to/verifiable-trust-infrastructure
 #
 # Built from vtc-service-v0.20.0 (pins.json). `tsp` MUST stay in FEATURES: re-checked at
 # 0.15.0, registry/messaging.rs `tsp_envelope` still calls the tsp-gated

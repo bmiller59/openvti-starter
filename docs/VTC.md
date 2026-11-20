@@ -130,7 +130,7 @@ The VTA image is built from the repo Dockerfile with `cargo build -p vta-service
 only, so the VTC needs a **second image**:
 
 ```sh
-nice -n 10 docker build -f docker/vtc.Dockerfile -t vtc-buildathon:local /path/to/verifiable-trust-infrastructure
+nice -n 10 docker build -f docker/vtc.Dockerfile -t vtc:local /path/to/verifiable-trust-infrastructure
 # preferred, from the pinned ref: npm run images:build vtc  (docs/PINS.md)
 # or: export VTC_IMAGE=<an image you were given>
 WITH_VTC=1 npm run up

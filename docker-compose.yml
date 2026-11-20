@@ -14,7 +14,7 @@
 # (`npm run images:build`), or set the variables yourself.
 services:
   vta:
-    image: ${VTA_IMAGE:-vta-buildathon:local}
+    image: ${VTA_IMAGE:-vta:local}
     entrypoint: ["/bin/sh", "/vta-entrypoint.sh"]
     command: []
     env_file: .vta/admin.env
@@ -49,7 +49,7 @@ services:
   # docs/VTC.md) or point VTC_IMAGE at one you were given.
   vtc:
     profiles: ["vtc"]
-    image: ${VTC_IMAGE:-vtc-buildathon:local}
+    image: ${VTC_IMAGE:-vtc:local}
     # Share the VTA's network namespace so the VTA's loopback DID host
     # (localhost:8100) is reachable from the VTC during setup and at runtime.
     network_mode: "service:vta"
@@ -93,7 +93,7 @@ services:
   # (short so a did:peer:2 applicant naming it fits the resolver's 1000 bytes; docs/MESSAGING.md).
   mediator:
     profiles: ["messaging"]
-    image: ${MEDIATOR_IMAGE:-mediator-buildathon:local}
+    image: ${MEDIATOR_IMAGE:-mediator:local}
     entrypoint: ["/bin/sh", "/mediator-entrypoint.sh"]
     command: []
     # Starts as root to write the volume; the entrypoint then drops to uid 10002.

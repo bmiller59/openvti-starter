@@ -3,7 +3,7 @@
 Part of the [docs index](README.md). Pins and drift checks: [PINS.md](PINS.md).
 
 > **Current state, plainly.** Prebuilt, multi-arch (amd64 and arm64) images of the VTA, VTC and mediator are published at `ghcr.io/bmiller59`
-> (`vta-buildathon`, `vtc-buildathon`, `mediator-buildathon`), built by this repository's images workflow (real runs of 2026-11-20, [PINS_LOG.md](../PINS_LOG.md)).
+> (`vta`, `vtc`, `mediator`), built by this repository's images workflow (real runs of 2026-11-20, [PINS_LOG.md](../PINS_LOG.md)).
 > The packages are public and were observed to pull anonymously, and `npm run images:verify` reported VERIFIED for all three (details in [VERIFY.md](VERIFY.md)).
 > `pins.json` `images.available` is `true` and records each image's index digest, so **the default path is to pull**: `npm run images:pull`, then `npm run up`.
 > **Building locally stays supported** as the fallback (`npm run setup`; for an unsupported architecture, no network, or to see the build) and is the only path for a pin that has not been published yet.
@@ -94,7 +94,7 @@ These run `docker save -o` and `docker load -i` on the `<name>:local` images the
 the script's `save -o` then `import` on a tiny scratch image (the image ID and labels survived), and `images:export` on the real VTA image (the tar is written, 179 MB).
 **Not verified:** a full export and import of all three images onto a second machine, and `up` from images loaded that way (it should be the same, as compose only needs the `:local` tags). Details
 that matter: the CPU architecture must match (import warns when it does not; an amd64 tar will not run natively on Apple silicon), and the tar is **unsigned**, so it is exactly as
-trustworthy as whoever made it ([VERIFY.md](VERIFY.md)). By hand the same thing is `docker save vta-buildathon:local vtc-buildathon:local | gzip > images.tar.gz` and `zcat images.tar.gz | docker load`.
+trustworthy as whoever made it ([VERIFY.md](VERIFY.md)). By hand the same thing is `docker save vta:local vtc:local | gzip > images.tar.gz` and `zcat images.tar.gz | docker load`.
 
 ## Reclaiming disk
 
@@ -103,7 +103,7 @@ Local builds leave things behind. `npm run clean` lists them and, only with `--a
 | What | Typical size | Scope |
 |---|---|---|
 | BuildKit cache of the resource-limited builders (`buildathon2-*`) | about 12 GB observed | `cache` |
-| Each superseded image (`vta`/`vtc`/`mediator-buildathon:<old ref8>` or `:<old version>-<ref8>`) | about 180-200 MB | `images` |
+| Each superseded image (`vta`/`vtc`/`mediator:<old ref8>` or `:<old version>-<ref8>`) | about 180-200 MB | `images` |
 | Each orphan source export `vti-XXXXXX` in `$TMPDIR` or `/tmp` (an interrupted build; `images:build` now removes its own on Ctrl-C and SIGTERM) | about 70 MB | `source` |
 | The VTI clone `../verifiable-trust-infrastructure` | about 0.9 GB | `checkout` |
 | `buildathon-images.tar` from `images:export` | 0.4 GB and up | `tars` |
@@ -136,14 +136,14 @@ There is **no `latest`**: a moving tag defeats pinning. The digest in `pins.json
 
 | Image | Name | Pin | Tags | Registry example |
 |---|---|---|---|---|
-| VTA | `vta-buildathon` | `vti.vta` (0.72.0) | `26d0da81`, `0.72.0-26d0da81` | `ghcr.io/bmiller59/vta-buildathon:0.72.0-26d0da81` |
-| VTC | `vtc-buildathon` | `vti.vtc` (0.20.0) | `26d0da81`, `0.20.0-26d0da81` | `ghcr.io/bmiller59/vtc-buildathon:0.20.0-26d0da81` |
-| mediator | `mediator-buildathon` | `messaging.mediator` (0.48.0) | `e6e2c636`, `0.48.0-e6e2c636` | `ghcr.io/bmiller59/mediator-buildathon:0.48.0-e6e2c636` |
+| VTA | `vta` | `vti.vta` (0.72.0) | `26d0da81`, `0.72.0-26d0da81` | `ghcr.io/bmiller59/vta:0.72.0-26d0da81` |
+| VTC | `vtc` | `vti.vtc` (0.20.0) | `26d0da81`, `0.20.0-26d0da81` | `ghcr.io/bmiller59/vtc:0.20.0-26d0da81` |
+| mediator | `mediator` | `messaging.mediator` (0.48.0) | `e6e2c636`, `0.48.0-e6e2c636` | `ghcr.io/bmiller59/mediator:0.48.0-e6e2c636` |
 
 Where each tag exists:
 
 - **Built locally** (`images:build`): `<name>:<ref8>`, `<name>:<version>-<ref8>` and `<name>:local`. A `VTI_LOCAL=1` working-tree build is only `:local`.
-- **Pulled** (`images:pull`): pulled by digest, then, only when the image reports exactly the pinned digest, tagged locally `<name>:<ref8>` and `<name>:<version>-<ref8>` (the mediator included, so it needs no hand-tagging; running the pull again re-applies the tags to an image that is already here). A pulled image is **never** tagged `:local`: that tag means "built here by `images:build`", `IMAGES=local` keeps meaning that, and a pull must not overwrite your own build. `npm run up` does not need `:local` for a pulled image: it runs the pinned digest reference. (Plain `docker compose up` outside `npm run up` falls back to `:local`; set `VTA_IMAGE=vta-buildathon:0.72.0-26d0da81` etc., or build.) A pin without a recorded digest is pulled by tag, unverified, and is not tagged locally.
+- **Pulled** (`images:pull`): pulled by digest, then, only when the image reports exactly the pinned digest, tagged locally `<name>:<ref8>` and `<name>:<version>-<ref8>` (the mediator included, so it needs no hand-tagging; running the pull again re-applies the tags to an image that is already here). A pulled image is **never** tagged `:local`: that tag means "built here by `images:build`", `IMAGES=local` keeps meaning that, and a pull must not overwrite your own build. `npm run up` does not need `:local` for a pulled image: it runs the pinned digest reference. (Plain `docker compose up` outside `npm run up` falls back to `:local`; set `VTA_IMAGE=vta:0.72.0-26d0da81` etc., or build.) A pin without a recorded digest is pulled by tag, unverified, and is not tagged locally.
 - **Tags in use are never moved.** Before `images:pull` or `images:build` points a tag at a different image, the kit asks Docker (read-only: `docker image inspect`, `docker ps -a`) whether any container, running or stopped, of any compose project, was created from the image the tag points to now. If so the tag is left alone and the output names the containers (name and compose project) and the way on: use the unique `<version>-<ref8>` tag or the pinned digest, stop those containers and re-run, or pass `--force`. `images:build` refuses before it starts building; `images:pull` skips only that tag, reports it, and still succeeds, because `up` and `images:verify` use the pinned digest reference (`<registry>/<name>@sha256:...`), which does not depend on any short tag. A tag that already points at the pulled image is never a move, so re-running a pull is always fine.
 - **In the registry**: the publish workflow pushes both tags on the same multi-arch index from now on. The images published on 2026-11-20 carry only the `<ref8>` tag; the next publish adds `<version>-<ref8>`. Until then, refer to a published image by its digest (what `images:pull` does) or by `<ref8>`.
 - **`npm run clean`** treats both forms of the current pin as kept, and both forms of any older pin as superseded.
@@ -153,6 +153,17 @@ Where each tag exists:
 `pins.json` `images.<kind>.digest` is the multi-arch index digest, recorded on 2026-11-20 from the first real publish runs (and checked against the live registry). `images:pull` and `up` pull by
 digest (`<registry>/<name>@sha256:...`), so a moved tag cannot change what runs. A pin advance that has no recorded digest yet (`null`) pulls by tag and
 `pins:check` warns "no digest in pins.json" (`images:pull -- --by-digest` refuses the tag fallback).
+
+### Renamed images
+
+Until 2026-11 the images were called `vta-buildathon`, `vtc-buildathon` and `mediator-buildathon`; they are now `vta`, `vtc` and `mediator` (registry `ghcr.io/bmiller59/vta` and so on, local `vta:<ref8>`, `vta:<version>-<ref8>`, `vta:local`). The short names are safe locally because the kit only ever touches an image that carries its `org.buildathon.*` labels: `images:build` refuses to move an existing `:local` (or other target) tag whose image lacks them (another project's `vta:local`), unless you pass `--force`, and `npm run clean` never lists or removes an image without them. The names come from one place, `pins.json` (`vti.vta.image`, `vti.vtc.image`, `messaging.mediator.image`), so the next rename is those three fields (a test checks that `docker-compose.yml` and the workflow agree).
+
+Migration and deprecation path:
+
+- New names are introduced first; **nothing removes the old ones automatically.** Other projects may still reference `vta-buildathon:...` locally or `ghcr.io/bmiller59/vta-buildathon` in the registry, so the old names keep working until the owner decides.
+- The old packages `ghcr.io/bmiller59/*-buildathon` stay in the registry until the owner deletes them by hand (GitHub, Packages, Package settings, Delete). The kit never deletes a package.
+- The old local names (`*-buildathon:<tag>`, only images carrying the kit labels) are listed by `npm run clean -- images` as "legacy name" candidates, removed only with that explicit scope plus `--apply`, one tag at a time, and only when no container (running or stopped, any project) uses them. A plain `npm run clean` only lists them.
+- The new packages are created by the next `images.yml` publish; a new GHCR package starts private, so set it public once (organiser step, see "What an organiser does"). Until `pins.json` `images.available` is true the kit builds locally.
 
 ### Checks
 

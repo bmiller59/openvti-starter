@@ -90,31 +90,31 @@ The easy way is `npm run images:verify`. It does the following, and you can do e
 ```sh
 # 1. The digest you have is the digest pins.json records (the digest is the identity; the tag is a hint)
 jq -r '.images.vta.digest' pins.json
-docker image inspect ghcr.io/bmiller59/vta-buildathon:26d0da81 --format '{{json .RepoDigests}}'
+docker image inspect ghcr.io/bmiller59/vta:26d0da81 --format '{{json .RepoDigests}}'
 
 # 2. The GitHub attestation: signed by this repository's images workflow
 DIGEST=$(jq -r '.images.vta.digest' pins.json)          # "null" only for a pin that has not been published yet
-gh attestation verify "oci://ghcr.io/bmiller59/vta-buildathon@$DIGEST" \
+gh attestation verify "oci://ghcr.io/bmiller59/vta@$DIGEST" \
   --repo bmiller59/openvti-starter \
   --signer-workflow bmiller59/openvti-starter/.github/workflows/images.yml
 
 # 3. The cosign signature, with the exact identity and issuer (the workflow on main, or an images-* tag)
-cosign verify "ghcr.io/bmiller59/vta-buildathon@$DIGEST" \
+cosign verify "ghcr.io/bmiller59/vta@$DIGEST" \
   --certificate-identity-regexp '^https://github\.com/bmiller59/openvti-starter/\.github/workflows/images\.yml@refs/(heads/main|tags/images-.+)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 4. The labels: what the image says it was built from
-docker image inspect ghcr.io/bmiller59/vta-buildathon:26d0da81 --format '{{json .Config.Labels}}' | jq
+docker image inspect ghcr.io/bmiller59/vta:26d0da81 --format '{{json .Config.Labels}}' | jq
 jq '.vti.vta | {ref, features}' pins.json      # org.buildathon.vti-ref and org.buildathon.vta-features must equal these
 
 # 5. The SBOM of your platform's image (the per-platform digest is inside the index)
-docker buildx imagetools inspect "ghcr.io/bmiller59/vta-buildathon@$DIGEST"      # lists one digest per platform
-gh attestation verify "oci://ghcr.io/bmiller59/vta-buildathon@<platform digest>" \
+docker buildx imagetools inspect "ghcr.io/bmiller59/vta@$DIGEST"      # lists one digest per platform
+gh attestation verify "oci://ghcr.io/bmiller59/vta@<platform digest>" \
   --repo bmiller59/openvti-starter --predicate-type https://spdx.dev/Document/v2.3 --format json \
   | jq '.[0].verificationResult.statement.predicate | {spdxVersion, packages: (.packages | length)}'
 ```
 
-Use the other image names for the VTC (`vtc-buildathon`) and mediator (`mediator-buildathon`). Images published by a fork: set
+Use the other image names for the VTC (`vtc`) and mediator (`mediator`). Images published by a fork: set
 `IMAGE_REGISTRY=ghcr.io/<their-org>` and `VERIFY_REPO=<their-org>/<their-repo>` for `images:verify`, or edit the commands above.
 The expected signer lives in `pins.json` (`images.verify`).
 
@@ -156,7 +156,7 @@ be), and how many layers match from the bottom. A difference in the ID is theref
 `dockerfile-sha256` is a real finding. Making the build reproducible would mean pinning the base images by digest and the apt packages by
 version (a snapshot mirror); that is not done.
 
-(An existing local `vtc-buildathon:local` and its `:26d0da81` tag having the same ID only means one was tagged from the other.)
+(An existing local `vtc:local` and its `:26d0da81` tag having the same ID only means one was tagged from the other.)
 
 ## Audit what goes in
 

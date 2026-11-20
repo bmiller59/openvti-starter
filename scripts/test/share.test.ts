@@ -13,7 +13,7 @@ test("export saves the :local tags, in order, with -o (no shell pipe)", () => {
 });
 
 test("import: loaded tags are read from docker's output", () => {
-  assert.deepEqual(loadedRefs("Loaded image: vta-buildathon:local\nLoaded image: vtc-buildathon:local\n"), ["vta-buildathon:local", "vtc-buildathon:local"]);
+  assert.deepEqual(loadedRefs("Loaded image: vta:local\nLoaded image: vtc:local\n"), ["vta:local", "vtc:local"]);
   assert.deepEqual(loadedRefs("Loaded image ID: sha256:abc\n"), []);
 });
 
