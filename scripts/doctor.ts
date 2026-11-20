@@ -9,6 +9,7 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { devBanner } from "./banner.js";
 import { env, type Mode, modeInfo, runtime, vtcChoice } from "./env.js";
+import { composeArgv } from "./lib/tunnel.js";
 import { runtimeModeError } from "./lib/binary.js";
 import { anyRunning, binaryChecks } from "./lib/binary-run.js";
 import { modeLine, parseModeFlags } from "./lib/modes.js";
@@ -55,7 +56,7 @@ async function isViteServer(port: number): Promise<boolean> {
 }
 
 const ownStackRunning = (): boolean => {
-  const r = spawnSync("docker", ["compose", "--profile", "vtc", "--profile", "messaging", "ps", "--status", "running", "-q"], { encoding: "utf8", timeout: 20_000 });
+  const r = spawnSync("docker", composeArgv(process.cwd(), ["--profile", "vtc", "--profile", "messaging"], ["ps", "--status", "running", "-q"]), { encoding: "utf8", timeout: 20_000 });
   return r.status === 0 && r.stdout.trim() !== "";
 };
 

@@ -21,7 +21,7 @@ import {
   writeStackMode, writeTunnel,
 } from "./lib/compose.js";
 import { currentMode, imagesAvailable, imageSpecs, imageStatus, realDocker, useImages, type ImageKind } from "./lib/images.js";
-import { composeEnv, mediatorDidFromToml, tunnelUrls, TUNNEL_FILE, volumeGuard, type TunnelState } from "./lib/tunnel.js";
+import { composeArgv, composeEnv, mediatorDidFromToml, tunnelUrls, TUNNEL_FILE, volumeGuard, type TunnelState } from "./lib/tunnel.js";
 import { resetAll } from "./lib/reset.js";
 import { runPreflight } from "./doctor.js";
 import { pins } from "./pins.js";
@@ -210,7 +210,7 @@ if (sub === "reset") {
   await guard("local");
   prepareImages(withVtc() ? ["vta", "vtc"] : ["vta"]);
   npm("vta:keygen");
-  run("docker", ["compose", ...(withVtc() ? ["--profile", "vtc"] : []), "up", "-d", "--wait"]);
+  run("docker", composeArgv(process.cwd(), withVtc() ? ["--profile", "vtc"] : [], ["up", "-d", "--wait"]));
   writeStackMode("local");
   npm("vta:provision");
   if (withVtc()) {

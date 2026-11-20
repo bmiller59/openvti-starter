@@ -10,7 +10,7 @@ import { LOCAL_VTA_URL, die, env, loadAdmin, mode, reachable, runtime } from "./
 import { runtimeModeError } from "./lib/binary.js";
 import { requireBinaries, startVtc } from "./lib/binary-run.js";
 import { composeEnvNow } from "./lib/compose.js";
-import { profileArgs } from "./lib/tunnel.js";
+import { composeFor } from "./lib/tunnel.js";
 
 const m = mode();
 if (m === "farm") die("vtc:up is for MODE=local or MODE=tunnel. In farm mode the portal provisions the VTC.");
@@ -22,7 +22,7 @@ if (runtime() === "binary") {
   console.log("the VTC is serving. Check: npm run vtc:hello");
   process.exit(0);
 }
-const dc = (args: string[]) => spawnSync("docker", ["compose", ...profileArgs(m, true), ...args], { encoding: "utf8", env: composeEnvNow() });
+const dc = (args: string[]) => spawnSync("docker", composeFor(m, true, args), { encoding: "utf8", env: composeEnvNow() });
 
 const up = dc(["up", "-d", "vtc"]);
 if (up.status !== 0) {

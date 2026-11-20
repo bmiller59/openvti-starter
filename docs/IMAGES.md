@@ -96,6 +96,14 @@ the script's `save -o` then `import` on a tiny scratch image (the image ID and l
 that matter: the CPU architecture must match (import warns when it does not; an amd64 tar will not run natively on Apple silicon), and the tar is **unsigned**, so it is exactly as
 trustworthy as whoever made it ([VERIFY.md](VERIFY.md)). By hand the same thing is `docker save vta:local vtc:local | gzip > images.tar.gz` and `zcat images.tar.gz | docker load`.
 
+### Sharing images with other projects
+
+Other projects and sessions on the same machine may run these images (a different compose project, a script, a test stack). The contract:
+
+- **Reference the unique version-ref tag or the digest**, e.g. `vta:0.83.0-3ee07a12` or `ghcr.io/bmiller59/vta@sha256:...`. Never reference `:local`: it means "whatever this kit last built here" and moves on every build. The bare `<ref8>` tag is stable for a pin too, but the version-ref tag says what it is.
+- **The kit never retags, removes or restarts anything a container uses.** `images:pull` and `images:build` leave a tag alone whose image any container (running or stopped, any project) uses, and say who uses it; `npm run clean` refuses such images and never considers images without the kit's labels; `npm run down`, `reset` and `pins:verify` name this checkout's own compose project explicitly (`docker compose -p <project>`) so they only touch its containers and volumes (a test checks that no script calls `docker compose` without it, and that nothing removes containers by name pattern). `--force` on `images:build` and `images:pull` is the one deliberate override.
+- **On a pin bump** a new tag pair appears (`<name>:<new ref8>`, `<name>:<new version>-<new ref8>`) next to the old ones. The old tags stay until `npm run clean -- images --apply`, and even then only when no container uses them. A consumer that references its own tag keeps working; to adopt the new pin, change its reference to the new version-ref tag or digest and recreate its containers yourself.
+
 ## Reclaiming disk
 
 Local builds leave things behind. `npm run clean` lists them and, only with `--apply`, removes them. It is a dry run by default, prints every item with its size and a total per scope and overall, and never touches an image that **any container uses** (running or stopped, of any project on this machine; shown as `in use by <container> (<compose project>)`), `:local`, the pinned tag, or anything it did not create (images without the kit's `org.buildathon.*` labels are never considered, so another project's `vta` stays). Superseded tags are removed by untagging one tag (`docker image rm <tag>`, never `-f`). Old-name images (`*-buildathon`, see [Renamed images](#renamed-images)) are listed on every run as "legacy name" and removed only by `npm run clean -- images --apply`, again only when unused.

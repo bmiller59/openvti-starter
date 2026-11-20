@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { die, runtime } from "./env.js";
 import { logFile } from "./lib/binary-run.js";
+import { composeArgv } from "./lib/tunnel.js";
 
 const which = process.argv[2] === "vtc" ? "vtc" : "vta";
 if (runtime() === "binary") {
@@ -12,5 +13,5 @@ if (runtime() === "binary") {
   if (!existsSync(f)) die(`${f} does not exist: the ${which} has not been started with RUNTIME=binary (npm run ${which === "vta" ? "up" : "vtc:up"}).`);
   spawnSync("tail", ["-n", "100", "-F", f], { stdio: "inherit" });
 } else {
-  spawnSync("docker", ["compose", ...(which === "vtc" ? ["--profile", "vtc"] : []), "logs", "-f", which], { stdio: "inherit" });
+  spawnSync("docker", composeArgv(process.cwd(), which === "vtc" ? ["--profile", "vtc"] : [], ["logs", "-f", which]), { stdio: "inherit" });
 }

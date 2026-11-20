@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } 
 import { pins } from "../pins.js";
 import { env } from "../env.js";
 import { IMAGE_KINDS, useImages } from "./images.js";
-import { composeEnv, composeProject, existingVolumes, hostFromLog, MODE_FILE, profileArgs, TUNNEL_FILE, type StackMode, type TunnelState } from "./tunnel.js";
+import { composeEnv, composeFor, composeProject, existingVolumes, hostFromLog, MODE_FILE, TUNNEL_FILE, type StackMode, type TunnelState } from "./tunnel.js";
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -42,7 +42,7 @@ export const composeEnvNow = (): NodeJS.ProcessEnv => {
 
 /** Run `docker compose` with the profiles for the mode. */
 export function dc(mode: StackMode, withVtc: boolean, args: string[], opts: { inherit?: boolean } = {}): SpawnSyncReturns<string> {
-  return spawnSync("docker", ["compose", ...profileArgs(mode, withVtc), ...args], {
+  return spawnSync("docker", composeFor(mode, withVtc, args), {
     encoding: "utf8", env: composeEnvNow(), stdio: opts.inherit ? "inherit" : "pipe", timeout: 600_000,
   });
 }

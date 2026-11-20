@@ -66,6 +66,17 @@ export function profileArgs(mode: "local" | "tunnel", withVtc: boolean): string[
   return mode === "tunnel" ? [...a, "--profile", "messaging"] : a;
 }
 
+/**
+ * Every `docker compose` call this kit makes goes through here, so the project is always named explicitly (`-p <project>`),
+ * never left to compose's own guess. `down`, `down -v`, `--remove-orphans`, `logs` and `exec` then act only on THIS checkout's
+ * containers and volumes, whatever else runs on the machine (other checkouts, other kits, other sessions' stacks).
+ */
+export function composeArgv(cwd: string, profiles: string[], args: string[]): string[] {
+  return ["compose", "-p", composeProject(cwd), ...profiles, ...args];
+}
+/** `profileArgs(...)` for local/tunnel, as a full `docker compose` argument vector for the current directory. */
+export const composeFor = (mode: "local" | "tunnel", withVtc: boolean, args: string[], cwd: string = process.cwd()): string[] => composeArgv(cwd, profileArgs(mode, withVtc), args);
+
 /** Compose names volumes `<project>_<volume>`; the project defaults to the directory name. */
 export function composeProject(cwd: string, override = process.env.COMPOSE_PROJECT_NAME): string {
   return override || basename(cwd).toLowerCase().replace(/[^a-z0-9_-]/g, "");
