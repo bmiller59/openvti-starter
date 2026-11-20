@@ -42,7 +42,8 @@ export function pullBlockers(p: Pins): string[] {
  * images "build" (default): images:build from the pinned upstream refs. "pull": pull the VTA and VTC by digest and verify the
  * supply chain (images:verify), and run everything after with IMAGES=registry so the stack uses exactly those images.
  */
-export function gateSteps(opts: { images?: ImagesSource } = {}): GateStep[] {
+export function gateSteps(opts: { images?: ImagesSource; cooldownSecs?: number } = {}): GateStep[] {
+  const cooldown = opts.cooldownSecs ?? DEFAULT_COOLDOWN_SECS;
   const pull = opts.images === "pull";
   const npm = (name: string, args: string[], timeoutMs: number, env?: Record<string, string>): GateStep => ({ name, cmd: "nice", args: ["-n", "10", "npm", "run", ...args], env: pull ? { IMAGES: "registry", ...env } : env, timeoutMs });
   const images = pull
@@ -57,9 +58,27 @@ export function gateSteps(opts: { images?: ImagesSource } = {}): GateStep[] {
     ...images,
     npm("up", ["up"], 15 * MIN, { WITH_VTC: "1" }),
     npm("e2e", ["e2e"], 20 * MIN),
+    ...(cooldown > 0 ? [cooldownStep(cooldown)] : []),
     npm("test:roles", ["test:roles"], 15 * MIN),
     npm("hello", ["hello"], 5 * MIN),
   ];
+}
+
+/**
+ * e2e leaves the VTC's per-address admission budget spent, and test:roles starts from it. The VTC's anonymous bucket is a burst of 10
+ * refilled one token per 5 s (vtc-service routes/mod.rs: per_second(5), burst_size(10)), so it is full again after 50 s; 60 s adds margin.
+ * test:roles also retries a 429 on its own (scripts/lib/rate-limit.ts); this pause makes that the exception.
+ */
+export const DEFAULT_COOLDOWN_SECS = 60;
+export const cooldownStep = (secs: number): GateStep => ({ name: "cooldown", cmd: "sleep", args: [String(secs)], timeoutMs: secs * 1000 + 30_000 });
+
+/** Parse `--cooldown <secs>` (or `--cooldown=<secs>`), else env PINS_COOLDOWN_SECS, else the default. 0 disables. */
+export function parseCooldown(argv: string[], env: Record<string, string | undefined> = {}): { secs: number } | { error: string } {
+  const i = argv.findIndex((a) => a === "--cooldown" || a.startsWith("--cooldown="));
+  const raw = i >= 0 ? (argv[i]!.includes("=") ? argv[i]!.split("=")[1] : argv[i + 1] ?? "") : env.PINS_COOLDOWN_SECS;
+  if (raw === undefined || (raw === "" && i < 0)) return { secs: DEFAULT_COOLDOWN_SECS };
+  const n = Number(raw);
+  return raw.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= 600 ? { secs: n } : { error: `--cooldown (or PINS_COOLDOWN_SECS) must be whole seconds from 0 to 600 (got ${JSON.stringify(raw)})` };
 }
 
 /** Teardown, always attempted after the gate (pass or fail), reported separately. */

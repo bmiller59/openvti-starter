@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { parse } from "yaml";
-import { gateSteps, parseImagesChoice, pullBlockers, resolveImagesSource, runGate, verifiedLogLine } from "../lib/pins-verify.js";
+import { cooldownStep, DEFAULT_COOLDOWN_SECS, gateSteps, parseCooldown, parseImagesChoice, pullBlockers, resolveImagesSource, runGate, verifiedLogLine } from "../lib/pins-verify.js";
 import type { Pins } from "../pins.js";
 
 const real = () => JSON.parse(readFileSync(new URL("../../pins.json", import.meta.url), "utf8")) as Pins;
@@ -42,17 +42,40 @@ test("pullBlockers: fails closed when the VTA or VTC digest is not pinned (the m
 });
 
 test("gateSteps: build mode is unchanged; pull mode pulls by digest, verifies, then runs the same gate against the registry images", () => {
-  assert.deepEqual(gateSteps().map((s) => s.name), ["images:build", "up", "e2e", "test:roles", "hello"]);
+  assert.deepEqual(gateSteps().map((s) => s.name), ["images:build", "up", "e2e", "cooldown", "test:roles", "hello"]);
   assert.deepEqual(gateSteps({ images: "build" }), gateSteps());
   const steps = gateSteps({ images: "pull" });
-  assert.deepEqual(steps.map((s) => s.name), ["pull:vta", "pull:vtc", "verify:vta", "verify:vtc", "up", "e2e", "test:roles", "hello"]);
+  assert.deepEqual(steps.map((s) => s.name), ["pull:vta", "pull:vtc", "verify:vta", "verify:vtc", "up", "e2e", "cooldown", "test:roles", "hello"]);
   assert.ok(steps.every((s) => s.timeoutMs > 0));
-  assert.ok(steps.every((s) => s.env?.IMAGES === "registry"), "every step uses the registry images, never a stale local build");
+  assert.ok(steps.filter((s) => s.name !== "cooldown").every((s) => s.env?.IMAGES === "registry"), "every step uses the registry images, never a stale local build");
   assert.equal(steps.find((s) => s.name === "up")!.env?.WITH_VTC, "1");
   assert.ok(steps.filter((s) => s.name.startsWith("pull:")).every((s) => s.args.includes("--by-digest")));
   assert.ok(!steps.some((s) => s.args.includes("images:build")));
   // The shared tail is the same list in both modes: nothing is duplicated in the workflow.
   assert.deepEqual(steps.slice(4).map((s) => s.args.join(" ")), gateSteps().slice(1).map((s) => s.args.join(" ")));
+});
+
+test("gate plan: a bounded cool-down sits between e2e and test:roles (the VTC's admission budget refills), configurable, 0 removes it", () => {
+  const names = (o?: { cooldownSecs?: number }) => gateSteps({ images: "pull", ...o }).map((s) => s.name);
+  const n = names();
+  assert.equal(n[n.indexOf("e2e") + 1], "cooldown");
+  assert.equal(n[n.indexOf("cooldown") + 1], "test:roles");
+  const c = gateSteps().find((s) => s.name === "cooldown")!;
+  assert.deepEqual([c.cmd, c.args], ["sleep", [String(DEFAULT_COOLDOWN_SECS)]]);
+  assert.ok(DEFAULT_COOLDOWN_SECS >= 50, "at least the unauth bucket's full refill (burst 10, one per 5 s)");
+  assert.ok(c.timeoutMs > DEFAULT_COOLDOWN_SECS * 1000 && c.timeoutMs < 5 * 60_000, "bounded");
+  assert.deepEqual(gateSteps({ cooldownSecs: 90 }).find((s) => s.name === "cooldown")!.args, ["90"]);
+  assert.equal(cooldownStep(5).timeoutMs, 35_000);
+  assert.ok(!names({ cooldownSecs: 0 }).includes("cooldown"));
+});
+
+test("parseCooldown: flag beats env beats default; rejects junk and out-of-range", () => {
+  assert.deepEqual(parseCooldown([]), { secs: DEFAULT_COOLDOWN_SECS });
+  assert.deepEqual(parseCooldown([], { PINS_COOLDOWN_SECS: "75" }), { secs: 75 });
+  assert.deepEqual(parseCooldown(["--cooldown", "10"], { PINS_COOLDOWN_SECS: "75" }), { secs: 10 });
+  assert.deepEqual(parseCooldown(["--cooldown=0"]), { secs: 0 });
+  for (const bad of ["-1", "abc", "1.5", "601"]) assert.ok("error" in parseCooldown(["--cooldown", bad]), bad);
+  assert.ok("error" in parseCooldown(["--cooldown"]));
 });
 
 test("pull mode stops at a failed verification before the stack starts", () => {

@@ -88,7 +88,7 @@ Advancing is scripted but always deliberate: nothing changes a pin unless a pers
 npm run pins:check                        # 1. report drift and the newest upstream tags; read the upstream changes you would take
 npm run pins:update                       # 2. dry run (default): prints the proposed pins.json changes and anything that would block them
 npm run pins:update -- --apply [--log]    # 3. write pins.json; --log also appends an UNVERIFIED entry to PINS_LOG.md
-npm run pins:verify                       # 4. the live gate (Docker): build, up, e2e, test:roles, hello; prints a PINS_LOG line only if all pass
+npm run pins:verify                       # 4. the live gate (Docker): build, up, e2e, cooldown, test:roles, hello; prints a PINS_LOG line only if all pass
                                           #    (CI runs the same gate on the pull request: see "The gate in CI" below)
 ```
 
@@ -106,7 +106,7 @@ npm run test:roles
 npm run hello
 ```
 
-`pins:verify` runs exactly those (niced, each with a hard timeout, stops at the first failure, always runs `npm run down` afterwards) and needs Docker; `--plan` lists the steps without running anything. `--images pull|auto` replaces the build with pulling the pinned VTA and VTC by digest plus `images:verify` (see below); the default stays `build`. It never edits files: on all-pass it prints one ready-to-paste line for [PINS_LOG.md](../PINS_LOG.md), which replaces the UNVERIFIED line `--log` wrote.
+`pins:verify` runs exactly those, with one addition: a `cooldown` pause (`sleep 60`) between `e2e` and `test:roles` (niced, each with a hard timeout, stops at the first failure, always runs `npm run down` afterwards) and needs Docker; `--plan` lists the steps without running anything. The pause exists because e2e leaves the VTC's per-address admission budget spent (anonymous bucket: burst 10, then one token per 5 s, so 50 s to refill; observed: `test:roles` failed within a second of e2e with `rate limited ... the pacing is too fast`). `--cooldown <secs>` or `PINS_COOLDOWN_SECS` changes it (0 removes it). `test:roles` also retries a 429 itself, per the VTC's `retryAfterSecs` (at most 3 retries a call, 120 s waited in all, logged, any other error fails at once), so a slow or shared VTC does not flake the gate but a stuck limiter still fails it. `--images pull|auto` replaces the build with pulling the pinned VTA and VTC by digest plus `images:verify` (see below); the default stays `build`. It never edits files: on all-pass it prints one ready-to-paste line for [PINS_LOG.md](../PINS_LOG.md), which replaces the UNVERIFIED line `--log` wrote.
 The gate covers `MODE=local` only; `MODE=tunnel` (mediator) and `farm:*` still need the manual checks below when you move those pins.
 
 Then, by hand:

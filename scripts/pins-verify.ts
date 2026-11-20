@@ -4,12 +4,16 @@
 //   --images auto|build|pull         where the images come from (default build). pull: pull the VTA and VTC by the digests in pins.json
 //                                    and run images:verify first (fails closed if a digest is missing); auto: pull when pins.json
 //                                    images.available is true, else build. This is what CI (.github/workflows/pins-gate.yml) uses.
+//   --cooldown <secs>                pause between e2e and test:roles so the VTC's admission budget refills (default 60; 0 = none;
+//                                    env PINS_COOLDOWN_SECS). The anonymous bucket is burst 10, one token per 5 s, so 50 s refills it.
+//   --cooldown <secs>                pause between e2e and test:roles so the VTC's admission budget refills (default 60; 0 = none;
+//                                    env PINS_COOLDOWN_SECS). The anonymous bucket is burst 10, one token per 5 s, so 50 s refills it.
 //   --print-images                   print only the resolved source (pull or build) and exit; the workflow reads it
 // Each step has a hard timeout and the run stops at the first failure. Only when every step passes does it print a
 // PINS_LOG.md line to paste (it never edits files). The stack is torn down afterwards either way (`npm run down`).
 import "./lib/cli.js";
 import { spawnSync } from "node:child_process";
-import { gateSteps, parseImagesChoice, pullBlockers, resolveImagesSource, runGate, summarize, teardownStep, verifiedLogLine, type GateStep } from "./lib/pins-verify.js";
+import { gateSteps, parseCooldown, parseImagesChoice, pullBlockers, resolveImagesSource, runGate, summarize, teardownStep, verifiedLogLine, type GateStep } from "./lib/pins-verify.js";
 import { supersededHintNow } from "./lib/clean-real.js";
 import { pins } from "./pins.js";
 
@@ -20,7 +24,9 @@ const { source, reason } = resolveImagesSource(pins(), parsed.choice);
 if (argv.includes("--print-images")) { console.log(source); process.exit(0); }
 const blockers = source === "pull" ? pullBlockers(pins()) : [];
 if (blockers.length) { console.error(`Cannot pull: ${blockers.join("; ")}. Record the digests (docs/IMAGES.md) or use --images build.`); process.exit(2); }
-const steps = gateSteps({ images: source });
+const cool = parseCooldown(argv, process.env);
+if ("error" in cool) { console.error(cool.error); process.exit(2); }
+const steps = gateSteps({ images: source, cooldownSecs: cool.secs });
 console.log(`images: ${source} (${reason})`);
 if (argv.includes("--plan")) {
   for (const s of steps) console.log(`${s.name.padEnd(12)} timeout ${s.timeoutMs / 60_000} min  ${s.env ? Object.entries(s.env).map(([k, v]) => `${k}=${v} `).join("") : ""}${s.cmd} ${s.args.join(" ")}`);

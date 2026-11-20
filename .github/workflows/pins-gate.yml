@@ -1,5 +1,5 @@
 # The live pin gate in CI: a pull request that changes the pins (or what builds and runs them) cannot merge without end to
-# end proof. It runs `npm run pins:verify` (scripts/pins-verify.ts: images, `WITH_VTC=1 npm run up`, e2e, test:roles, hello,
+# end proof. It runs `npm run pins:verify` (scripts/pins-verify.ts: images, `WITH_VTC=1 npm run up`, e2e, a 60 s cooldown so the VTC's admission budget refills, test:roles, hello,
 # each with a hard timeout, then `down`), so the command list lives in ONE place and this file does not repeat it.
 #
 # Required check: make `pins-gate` a required status check (docs/PINS.md has the one-time `gh api` command). A required check that
@@ -78,7 +78,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-24.04
-    # Build mode: images:build 90 min cap + up 15 + e2e 20 + test:roles 15 + hello 5, plus setup. Pull mode finishes in well under an hour.
+    # Build mode: images:build 90 min cap + up 15 + e2e 20 + cooldown 1.5 + test:roles 15 + hello 5, plus setup. Pull mode finishes in well under an hour.
     timeout-minutes: 170
     permissions:
       contents: read

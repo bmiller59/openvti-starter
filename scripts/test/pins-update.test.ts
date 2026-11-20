@@ -128,7 +128,7 @@ test("follow-up lists the gate commands; the log entry is marked UNVERIFIED and 
 
 test("pins:verify gate: ordered bounded steps, stops at the first failure, summary and log line", () => {
   const steps = gateSteps();
-  assert.deepEqual(steps.map((s) => s.name), ["images:build", "up", "e2e", "test:roles", "hello"]);
+  assert.deepEqual(steps.map((s) => s.name), ["images:build", "up", "e2e", "cooldown", "test:roles", "hello"]);
   assert.ok(steps.every((s) => s.timeoutMs > 0 && s.timeoutMs <= 90 * 60_000));
   assert.equal(steps[1].env?.WITH_VTC, "1");
   assert.equal(teardownStep().args.join(" "), "run down");
