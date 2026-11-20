@@ -10,11 +10,51 @@ export type StepRunner = (s: GateStep) => { status: number | null; timedOut: boo
 
 const MIN = 60_000;
 
-/** `nice -n 10` is applied to the heavy steps by the caller's `cmd`, so children inherit it. */
-export function gateSteps(): GateStep[] {
-  const npm = (name: string, args: string[], timeoutMs: number, env?: Record<string, string>): GateStep => ({ name, cmd: "nice", args: ["-n", "10", "npm", "run", ...args], env, timeoutMs });
+export type ImagesChoice = "auto" | "build" | "pull";
+export type ImagesSource = "build" | "pull";
+
+/** Parse `--images <auto|build|pull>` (also `--images=pull`). Default `build`: the local gate always proves the upstream source builds. */
+export function parseImagesChoice(argv: string[]): { choice: ImagesChoice } | { error: string } {
+  const i = argv.findIndex((a) => a === "--images" || a.startsWith("--images="));
+  if (i < 0) return { choice: "build" };
+  const v = argv[i]!.includes("=") ? argv[i]!.split("=")[1] : argv[i + 1];
+  return v === "auto" || v === "build" || v === "pull" ? { choice: v } : { error: `--images must be auto, build or pull (got ${JSON.stringify(v ?? "")})` };
+}
+
+/** Where the gate's images come from. `auto` pulls the published, signed images when pins.json says they are available, else builds from the pinned upstream refs. */
+export function resolveImagesSource(p: Pins, choice: ImagesChoice): { source: ImagesSource; reason: string } {
+  if (choice === "build") return { source: "build", reason: "--images build: build from the pinned upstream refs" };
+  if (choice === "pull") return { source: "pull", reason: "--images pull: pull the pinned images by digest and verify them" };
+  return p.images.available === true
+    ? { source: "pull", reason: "pins.json images.available is true: pull the pinned images by digest and verify them" }
+    : { source: "build", reason: "pins.json images.available is false: no prebuilt images, build from the pinned upstream refs" };
+}
+
+/** Reasons pulling cannot be trusted. Pull mode fails closed on these (it never falls back to a movable tag or to a build). */
+export function pullBlockers(p: Pins): string[] {
+  const out: string[] = [];
+  for (const k of ["vta", "vtc"] as const) if (!p.images[k].digest) out.push(`pins.json images.${k}.digest is null: the image would be pulled by tag, which is not pinned`);
+  return out;
+}
+
+/**
+ * `nice -n 10` is applied to the heavy steps by the caller's `cmd`, so children inherit it.
+ * images "build" (default): images:build from the pinned upstream refs. "pull": pull the VTA and VTC by digest and verify the
+ * supply chain (images:verify), and run everything after with IMAGES=registry so the stack uses exactly those images.
+ */
+export function gateSteps(opts: { images?: ImagesSource } = {}): GateStep[] {
+  const pull = opts.images === "pull";
+  const npm = (name: string, args: string[], timeoutMs: number, env?: Record<string, string>): GateStep => ({ name, cmd: "nice", args: ["-n", "10", "npm", "run", ...args], env: pull ? { IMAGES: "registry", ...env } : env, timeoutMs });
+  const images = pull
+    ? [
+        npm("pull:vta", ["images:pull", "--", "vta", "--by-digest"], 15 * MIN),
+        npm("pull:vtc", ["images:pull", "--", "vtc", "--by-digest"], 15 * MIN),
+        npm("verify:vta", ["images:verify", "--", "vta"], 5 * MIN),
+        npm("verify:vtc", ["images:verify", "--", "vtc"], 5 * MIN),
+      ]
+    : [npm("images:build", ["images:build", "--", "all"], 90 * MIN)];
   return [
-    npm("images:build", ["images:build", "--", "all"], 90 * MIN),
+    ...images,
     npm("up", ["up"], 15 * MIN, { WITH_VTC: "1" }),
     npm("e2e", ["e2e"], 20 * MIN),
     npm("test:roles", ["test:roles"], 15 * MIN),
@@ -41,6 +81,7 @@ export const summarize = (results: StepResult[]): string =>
   results.map((r) => `${r.ok ? "PASS" : r.timedOut ? "TIMEOUT" : "FAIL"}  ${r.name.padEnd(12)} ${(r.ms / 1000).toFixed(0)}s${r.ok ? "" : ` (exit ${r.status})`}`).join("\n");
 
 /** The line to paste into PINS_LOG.md. Only call it when every step passed. */
-export function verifiedLogLine(p: Pins, today: string): string {
-  return `- **${today}** · Pins verified: VTA \`${p.vti.vta.tag}\` and VTC \`${p.vti.vtc.tag}\` (commit \`${p.vti.vta.ref.slice(0, 8)}\`), mediator ${p.messaging.mediator.version} (\`${p.messaging.mediator.ref.slice(0, 8)}\`) pinned. Passed by \`npm run pins:verify\`, MODE=local, one run: images:build, WITH_VTC=1 up, e2e, test:roles, hello. Not covered: MODE=tunnel, farm:*.`;
+export function verifiedLogLine(p: Pins, today: string, images: ImagesSource = "build"): string {
+  const imgStep = images === "pull" ? "images:pull by digest, images:verify" : "images:build";
+  return `- **${today}** · Pins verified: VTA \`${p.vti.vta.tag}\` and VTC \`${p.vti.vtc.tag}\` (commit \`${p.vti.vta.ref.slice(0, 8)}\`), mediator ${p.messaging.mediator.version} (\`${p.messaging.mediator.ref.slice(0, 8)}\`) pinned. Passed by \`npm run pins:verify\`, MODE=local, one run: ${imgStep}, WITH_VTC=1 up, e2e, test:roles, hello. Not covered: MODE=tunnel, farm:*.`;
 }

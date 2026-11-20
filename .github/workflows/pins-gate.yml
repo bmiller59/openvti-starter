@@ -1,0 +1,229 @@
+# The live pin gate in CI: a pull request that changes the pins (or what builds and runs them) cannot merge without end to
+# end proof. It runs `npm run pins:verify` (scripts/pins-verify.ts: images, `WITH_VTC=1 npm run up`, e2e, test:roles, hello,
+# each with a hard timeout, then `down`), so the command list lives in ONE place and this file does not repeat it.
+#
+# Required check: make `pins-gate` a required status check (docs/PINS.md has the one-time `gh api` command). A required check that
+# is skipped by a `paths:` filter on the trigger never reports and blocks the merge, so there is NO paths filter on the trigger.
+# Instead:
+#   changes    always runs (seconds): did the PR touch pins.json, docker/**, scripts/pins-*.ts, scripts/lib/pins-*.ts,
+#              docker-compose.yml or this workflow? (the diff of the merge commit against the base tip)
+#   gate       the expensive job, only when `changes` says so (always, for workflow_dispatch)
+#   pins-gate  always runs, is the job to require: passes when the gate passed, or when nothing relevant changed;
+#              fails when the gate failed, was cancelled, or was skipped although it was needed.
+#
+# Image source (explicit in the job summary), decided by `pins:verify --images auto`:
+#   pins.json images.available is true   pull the pinned VTA and VTC images BY DIGEST from images.registry, then
+#                                        `images:verify` (GitHub attestation and cosign keyless signature) BEFORE anything runs.
+#                                        Fails closed: a missing digest or a failed verification fails the gate, no fallback.
+#   images.available is false (today)    build from the pinned upstream refs (`images:build`, amd64 only) from a checkout of
+#                                        the VTI repository at the exact pinned commit. A cold Rust build is slow (25 to 40
+#                                        minutes per image on a good machine), so the job timeout is long.
+#
+# Runner limits: a GitHub-hosted ubuntu-24.04 runner has 4 vCPU, 16 GB RAM and little free disk. The docs ask for several GB of
+# RAM and about 10 GB of disk for the images; the build needs more than the runner offers by default, so the job frees disk
+# (removes preinstalled toolchains) and adds 16 GB of swap on /mnt, the same measure as images.yml.
+# Not done: a Docker layer cache (buildx gha cache). images:build drives its own buildx builder and does not take cache flags,
+# so every build-mode run is a cold build until the images are published (images.available) and the gate pulls instead.
+#
+# Secrets: none. Fork pull requests get a read-only token, which is enough (checkout, and reading packages).
+# STATUS: written and statically checked locally (YAML parse, scripts/test/pins-gate-workflow.test.ts), NEVER RUN on GitHub.
+# The first run is the real test; expect to fix something.
+name: pins-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pins-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Did the PR touch the pins or what builds and runs them?
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: the gate always runs." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # On pull_request HEAD is the merge commit; its first parent is the current base tip, so this is exactly what the PR changes.
+          files="$(git diff --name-only HEAD^1 HEAD)"
+          echo "$files"
+          if printf '%s\n' "$files" | grep -Eq '^(pins\.json|docker-compose\.yml|docker/.*|scripts/pins-[^/]*\.ts|scripts/lib/pins-[^/]*\.ts|\.github/workflows/pins-gate\.yml)$'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Pins or their build/run files changed: the live gate runs." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing the gate covers changed: the live gate is not needed, this check passes." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  gate:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    # Build mode: images:build 90 min cap + up 15 + e2e 20 + test:roles 15 + hello 5, plus setup. Pull mode finishes in well under an hour.
+    timeout-minutes: 170
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TMPDIR: ${{ github.workspace }}/../tmp
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - name: Install (no lifecycle scripts)
+        run: |
+          mkdir -p "$TMPDIR"
+          npm ci --ignore-scripts
+
+      # The decision lives in scripts/lib/pins-verify.ts (resolveImagesSource), not here. --plan also exits non-zero when pulling
+      # is chosen but a digest is missing from pins.json, so that case fails here, early and cheaply.
+      - name: Decide the image source
+        id: source
+        run: |
+          set -euo pipefail
+          source="$(npm run --silent pins:verify -- --images auto --print-images)"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          {
+            echo "## pins-gate"
+            echo
+            echo "Image source: **$source**"
+            echo
+            echo '```'
+            npm run --silent pins:verify -- --images auto --plan
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Free disk space
+        run: |
+          df -h / /mnt
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af > /dev/null || true
+          df -h / /mnt
+
+      # Same reason as images.yml: rustc and the linker are OOM-killed on a 16 GB runner without swap.
+      - name: Add swap
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 16G /mnt/gate.swap
+          sudo chmod 600 /mnt/gate.swap
+          sudo mkswap /mnt/gate.swap
+          sudo swapon /mnt/gate.swap
+          free -h
+
+      # --- pull mode: the pinned images by digest, verified by `images:verify` as the first gate steps ---
+      - name: Log in to GHCR
+        if: steps.source.outputs.source == 'pull'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Install cosign
+        if: steps.source.outputs.source == 'pull'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # --- build mode: the VTI repository at the exact pinned commit(s), as images.yml fetches it ---
+      - name: Fetch upstream source at the pinned commit
+        if: steps.source.outputs.source == 'build'
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/vti"
+          upstream="$(node -p 'require("./pins.json").vti.repo')"
+          git init -q "$src"
+          git -C "$src" remote add origin "${upstream}.git"
+          for ref in $(node -p '[...new Set([require("./pins.json").vti.vta.ref, require("./pins.json").vti.vtc.ref])].join(" ")'); do
+            git -C "$src" fetch -q --depth 1 origin "$ref"
+            test "$(git -C "$src" rev-parse FETCH_HEAD)" = "$ref"
+          done
+          echo "VTI_PATH=$src" >> "$GITHUB_ENV"
+
+      # BUILD_MEMORY / BUILD_CPUS raise images:build's default cap (6g, a quarter of the cores) to what the runner has; the swap above
+      # backs it. Both are ignored in pull mode.
+      - name: Run the gate (pins:verify)
+        run: |
+          set -o pipefail
+          npm run pins:verify -- --images "$SOURCE" 2>&1 | tee "$RUNNER_TEMP/gate.log"
+        env:
+          SOURCE: ${{ steps.source.outputs.source }}
+          BUILD_MEMORY: 12g
+          BUILD_CPUS: "4"
+
+      - name: Job summary
+        if: always()
+        env:
+          SOURCE: ${{ steps.source.outputs.source }}
+        run: |
+          {
+            echo
+            echo "### Gate result (image source: $SOURCE)"
+            echo '```'
+            grep -E '^(PASS|FAIL|TIMEOUT)  ' "$RUNNER_TEMP/gate.log" || echo "no step summary (the run stopped before it)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Always tear down, so a failed run leaves nothing behind on a reused runner.
+      - name: Collect container logs
+        if: failure() || cancelled()
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          docker ps -a > "$RUNNER_TEMP/logs/docker-ps.txt" 2>&1 || true
+          for c in $(docker ps -aq); do docker logs --tail 2000 "$c" > "$RUNNER_TEMP/logs/$c.log" 2>&1 || true; done
+          cp "$RUNNER_TEMP/gate.log" "$RUNNER_TEMP/logs/" 2>/dev/null || true
+      - name: Tear down
+        if: always()
+        run: npm run down
+        continue-on-error: true
+      - name: Upload logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pins-gate-logs
+          path: ${{ runner.temp }}/logs
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The job to mark as a required status check. Always runs.
+  pins-gate:
+    name: pins-gate
+    needs: [changes, gate]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Decide
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          RUN: ${{ needs.changes.outputs.run }}
+          GATE: ${{ needs.gate.result }}
+        run: |
+          echo "changes=$CHANGES run=$RUN gate=$GATE"
+          [ "$CHANGES" = "success" ] || { echo "::error::could not tell whether the gate is needed"; exit 1; }
+          if [ "$RUN" = "true" ]; then
+            [ "$GATE" = "success" ] || { echo "::error::the live pin gate did not pass ($GATE)"; exit 1; }
+          else
+            [ "$GATE" = "skipped" ] || { echo "::error::unexpected gate result $GATE"; exit 1; }
+          fi

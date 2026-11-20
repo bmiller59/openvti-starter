@@ -92,6 +92,7 @@ npm run pins:check                        # 1. report drift and the newest upstr
 npm run pins:update                       # 2. dry run (default): prints the proposed pins.json changes and anything that would block them
 npm run pins:update -- --apply [--log]    # 3. write pins.json; --log also appends an UNVERIFIED entry to PINS_LOG.md
 npm run pins:verify                       # 4. the live gate (Docker): build, up, e2e, test:roles, hello; prints a PINS_LOG line only if all pass
+                                          #    (CI runs the same gate on the pull request: see "The gate in CI" below)
 ```
 
 `pins:update` finds the newest `vta-service-v*` and `vtc-service-v*` release tags (`git ls-remote` on `vti.repo`), resolves each to its commit and proposes `tag`, `version` and `ref` for both, plus `pinnedOn`, `updated` and an "unverified" `why`.
@@ -108,7 +109,7 @@ npm run test:roles
 npm run hello
 ```
 
-`pins:verify` runs exactly those (niced, each with a hard timeout, stops at the first failure, always runs `npm run down` afterwards) and needs Docker; `--plan` lists the steps without running anything. It never edits files: on all-pass it prints one ready-to-paste line for [PINS_LOG.md](../PINS_LOG.md), which replaces the UNVERIFIED line `--log` wrote.
+`pins:verify` runs exactly those (niced, each with a hard timeout, stops at the first failure, always runs `npm run down` afterwards) and needs Docker; `--plan` lists the steps without running anything. `--images pull|auto` replaces the build with pulling the pinned VTA and VTC by digest plus `images:verify` (see below); the default stays `build`. It never edits files: on all-pass it prints one ready-to-paste line for [PINS_LOG.md](../PINS_LOG.md), which replaces the UNVERIFIED line `--log` wrote.
 The gate covers `MODE=local` only; `MODE=tunnel` (mediator) and `farm:*` still need the manual checks below when you move those pins.
 
 Then, by hand:
@@ -118,7 +119,24 @@ Then, by hand:
 3. Review the diff, commit (pin change, log line and doc changes together).
 4. Rebuild and republish the images: run the `images` workflow and record the new digests in `pins.json` ([IMAGES.md](IMAGES.md), [EVENT.md](EVENT.md)). Until a digest is recorded, `pins:check` says so.
 
-**Weekly reminder.** `.github/workflows/pins-bump.yml` runs `pins:update` as a dry run every Monday (and on demand) and opens one issue when a newer VTA/VTC release exists. It never edits `pins.json`, opens a pull request or merges.
+## The gate in CI
+
+`.github/workflows/pins-gate.yml` runs `npm run pins:verify` on every pull request that changes `pins.json`, `docker/**`, `docker-compose.yml`, `scripts/pins-*.ts`, `scripts/lib/pins-*.ts` or the workflow itself (and on demand, `workflow_dispatch`). A pin bump therefore cannot merge without e2e proof once the check is required. Status: written and statically checked, never run on GitHub; the first run is the real test.
+
+- **Required-check safe.** There is no path filter on the trigger (a required check skipped by a filter never reports and blocks the merge). A cheap `changes` job decides, and the final `pins-gate` job always runs: it passes when the live gate passed, or when nothing the gate covers changed; it fails when the gate failed, was cancelled, or was skipped although needed. Mark **`pins-gate`** as the required check (below).
+- **Where the images come from** (`pins:verify --images auto`, printed in the job summary): when `pins.json` `images.available` is `true`, the VTA and VTC are pulled **by the digests in `pins.json`** and checked with `npm run images:verify` (GitHub attestation and cosign keyless signature) before anything starts, and the stack runs with `IMAGES=registry`; a missing digest or a failed verification fails the gate (no fallback to a tag or a build). While `available` is `false` (today) the gate builds from the pinned upstream refs (`images:build`, amd64 only) from a checkout of the VTI repository at the pinned commit. Cold build, no layer cache: expect a long run (the job timeout is 170 minutes; the build step alone is capped at 90).
+- **Runner limits.** A GitHub-hosted `ubuntu-24.04` runner has 4 vCPU, 16 GB RAM and limited free disk, below the "several GB of RAM, about 10 GB of disk" a comfortable build wants. The job removes preinstalled toolchains to free disk, adds 16 GB of swap on `/mnt` (as `images.yml` does) and raises `images:build`'s cap to `BUILD_MEMORY=12g`, `BUILD_CPUS=4`. Whether that is enough for the Rust LTO links is unproven until a real run.
+- **After a run.** Failure uploads `pins-gate-logs` (gate output, `docker ps`, container logs); `npm run down` always runs. The PINS_LOG line the gate prints is in the job log: paste it into the PR (it names the image source used).
+- **One-time manual step (needs repo admin; not done by any workflow).** After the first green run, require the check on `main`. This replaces the protection settings, so read the current ones first (`gh api repos/bmiller59/openvti-starter/branches/main/protection`); if none exist, the simplest form is:
+
+  ```sh
+  gh api -X PATCH repos/bmiller59/openvti-starter/branches/main/protection/required_status_checks \
+    -F strict=true -f 'contexts[]=test' -f 'contexts[]=pins-gate'
+  ```
+
+  The `contexts` list is replaced, not appended: `test` is the `ci` workflow's job, `pins-gate` the new one (check names are job names). That PATCH only works when `main` already has required status checks configured; otherwise create the protection with `gh api -X PUT repos/bmiller59/openvti-starter/branches/main/protection` and a JSON body that includes `required_status_checks` (`{"strict":true,"contexts":["test","pins-gate"]}`), `enforce_admins`, `required_pull_request_reviews` and `restrictions` (use `null` for the ones you do not want).  For a repository ruleset use "Require status checks" with `pins-gate`.
+
+**Weekly reminder.** `.github/workflows/pins-bump.yml` runs `pins:update` as a dry run every Monday (and on demand) and opens one issue when a newer VTA/VTC release exists (the issue points at the gate above). It never edits `pins.json`, opens a pull request or merges.
 
 **Known gap: base images.** The Dockerfiles' base images (the Rust and runtime stages, in `docker/*.Dockerfile` and the VTI Dockerfile they build from) are not pinned by digest and are not covered by `pins.json` or `pins:update`. A rebuild can pick up a newer base image. Pin them by digest if you need bit-for-bit rebuilds.
 

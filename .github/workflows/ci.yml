@@ -2,6 +2,7 @@
 # No Docker, no network services and no secrets are needed (the tests use fakes and local servers).
 # Node is pinned to the 22.x release the jsdom UI tests (collab-room) were verified on: Node 22.15 fails them
 # with a SubtleCrypto/jsdom error. Bump it deliberately.
+# The live pin gate (Docker, e2e) is a separate workflow, pins-gate.yml, which a pull request that changes the pins must pass.
 # STATUS: written and YAML-checked locally, not yet run on GitHub; the first run is the real test.
 name: ci
 
