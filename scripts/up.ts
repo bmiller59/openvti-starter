@@ -9,11 +9,11 @@
 //                .env, provision.
 import "./lib/cli.js";
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { devBanner, tunnelBanner } from "./banner.js";
-import { clearGeneratedEnv, die, ENV_FILE, LOCAL_VTC_URL, env, modeInfo, removeEnv, runtime, updateEnv, vtcChoice, withVtc } from "./env.js";
+import { die, ENV_FILE, LOCAL_VTC_URL, env, modeInfo, removeEnv, runtime, updateEnv, vtcChoice, withVtc } from "./env.js";
 import { runtimeModeError } from "./lib/binary.js";
-import { anyRunFiles, requireBinaries, resetBinaries, resolveNow, startVta, stopBinaries } from "./lib/binary-run.js";
+import { anyRunFiles, requireBinaries, resolveNow, startVta, stopBinaries } from "./lib/binary-run.js";
 import { confirm } from "./lib/prompt.js";
 import { modeLine, parseModeFlags } from "./lib/modes.js";
 import {
@@ -22,6 +22,7 @@ import {
 } from "./lib/compose.js";
 import { currentMode, imagesAvailable, imageSpecs, imageStatus, realDocker, useImages, type ImageKind } from "./lib/images.js";
 import { composeEnv, mediatorDidFromToml, tunnelUrls, TUNNEL_FILE, volumeGuard, type TunnelState } from "./lib/tunnel.js";
+import { resetAll } from "./lib/reset.js";
 import { runPreflight } from "./doctor.js";
 import { pins } from "./pins.js";
 
@@ -140,23 +141,6 @@ async function stop(): Promise<void> {
   if (anyRunFiles()) await stopBinaries(); // a stack started with RUNTIME=binary and now taken down without it
   const r = dc("tunnel", true, ["down", "--remove-orphans"], { inherit: true });
   if (r.status !== 0) console.error("docker compose down did not finish cleanly (is Docker running?).");
-}
-
-/** Everything: stop the stack and any tunnels, delete the volumes, the generated keys (`.vta/`) and the kit's own `.env` keys. Works in every mode. */
-async function resetAll(): Promise<void> {
-  const t = readTunnel();
-  const binary = runtime() === "binary";
-  if (binary || anyRunFiles()) await resetBinaries();
-  const hadDocker = !binary && have("docker");
-  if (hadDocker) {
-    const r = dc("tunnel", true, ["down", "-v", "--remove-orphans"], { inherit: true });
-    if (r.status !== 0) console.error("docker compose down -v did not finish cleanly (is Docker running?). Volumes may remain: docker volume ls.");
-  }
-  const n = stopTunnels(t?.pids ?? []);
-  clearStackFiles();
-  rmSync(".vta", { recursive: true, force: true });
-  const kept = clearGeneratedEnv();
-  console.log(`reset: ${binary ? "binaries stopped, .vta/run deleted" : "containers and volumes removed"}${n ? `, ${n} tunnel(s) stopped` : ""}, .vta/ deleted, the kit's keys removed from ${ENV_FILE}${kept.length ? ` (kept your own: ${kept.join(", ")})` : ""}.`);
 }
 
 const flags = parseModeFlags(process.argv.slice(2));
