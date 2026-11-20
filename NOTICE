@@ -9,8 +9,27 @@ the client in packages/vta-client. The consumer pipeline in
 templates/inbox-verifier follows the usage documented in
 dtgwg-trust-tasks-tf (Apache-2.0): GETTING-STARTED.md and trust-tasks-ts/README.md.
 
-The `vta-buildathon:local` container image is built from the
-verifiable-trust-infrastructure repository and is not distributed here.
+Container images. The images this project builds and publishes at ghcr.io/bmiller59
+(vta-buildathon, vtc-buildathon, mediator-buildathon; built by .github/workflows/images.yml, or
+locally as <name>:local) are built, unmodified, from the upstream sources at the refs pinned in
+pins.json, and are distributed under the licences of that software:
+
+- vta-buildathon and vtc-buildathon: OpenVTC/verifiable-trust-infrastructure
+  (https://github.com/OpenVTC/verifiable-trust-infrastructure, Apache-2.0), at commit
+  26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f (vta-service-v0.72.0, vtc-service-v0.20.0).
+- mediator-buildathon: affinidi-messaging-mediator
+  (https://github.com/affinidi/affinidi-messaging-mediator, Apache-2.0, with its own NOTICE.txt), at
+  commit e6e2c63654bb43bb7feb732834702cd940b2bcce (v0.48.0).
+
+The Apache-2.0 text is in LICENSE here and in each upstream repository at those commits; the
+upstream NOTICE.txt of the mediator is in its repository at that commit. The images carry the
+labels org.opencontainers.image.licenses (Apache-2.0), org.buildathon.upstream-source and
+org.opencontainers.image.source, and the exact upstream commit. The images themselves do not
+contain copies of the licence files. Both upstream projects enforce a permissive-only licence
+allow-list over their Rust dependencies with cargo-deny (deny.toml at the pinned commits: MIT,
+Apache-2.0, BSD, ISC, Zlib and similar); this repository has no deny.toml of its own and has not
+audited those transitive crates. Each published image has an SPDX SBOM attestation listing the
+packages in it (docs/VERIFY.md). The Debian base layers carry their own package licences.
 
 The TSP client in packages/tsp-client uses @openvtc/pnm-core and @openvtc/vti-tsp-js (Apache-2.0, from
 https://github.com/OpenVTC/vta-browser-plugin) as npm dependencies; their sources are not copied here.
