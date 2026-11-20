@@ -3,7 +3,7 @@
 #
 #   docker build -f docker/vtc.Dockerfile -t vtc:local /path/to/verifiable-trust-infrastructure
 #
-# Built from vtc-service-v0.20.0 (pins.json). `tsp` MUST stay in FEATURES: re-checked at
+# Built from the vtc-service tag in pins.json (vti.vtc.tag). `tsp` MUST stay in FEATURES: re-checked at
 # 0.15.0, registry/messaging.rs `tsp_envelope` still calls the tsp-gated
 # outbound::seal_trust_task_tsp unconditionally, so a build without it fails (and `tsp` is in
 # the crate's default features anyway).
@@ -11,7 +11,9 @@
 # OS keyring (no secret-service in a container) and the admin SPA (needs a Node build);
 # add `admin-ui` back, and a Node stage, if you want the console at /admin.
 ARG VTI_REF=unknown
-ARG RUST_VERSION=1.95
+# Keep RUST_VERSION equal to the pinned release's rust-toolchain.toml (the upstream Dockerfile builds `FROM rust:<that>`):
+# 1.100.0 since the 0.83/0.31 bump (the 0.72/0.20 release had no toolchain file and built with 1.95).
+ARG RUST_VERSION=1.100.0
 FROM rust:${RUST_VERSION}-bookworm AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends clang cmake libdbus-1-dev libssl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*

@@ -15,14 +15,14 @@ npm run images:verify [-- vta|vtc|mediator|all]   # is it the pinned, signed ima
 npm run pins:check [-- --strict]     # report drift; changes nothing
 ```
 
-**Pull first; build locally as the fallback.** `pins.json` `images.available` is `true`: the images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
+**Pull first; build locally as the fallback.** `pins.json` `images.available` is `false` for now (the 0.83/0.31 pin and the renamed images are not published yet; the kit and the gate build locally). Once it is `true` again, the images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
 The tags come from the pin: `<ref8>` (the first 8 characters of the pinned ref) and `<version>-<ref8>`; a bump changes both ([IMAGES.md](IMAGES.md#image-names-and-tags)). Building locally (the commands below) remains supported, for an unsupported CPU architecture, no network, or a pin that has not been published yet.
 
 `images:build` exports each pinned ref from a VTI checkout (`VTI_PATH`, default
 `../verifiable-trust-infrastructure`) with `git archive`, so whatever is checked out
 there is irrelevant. `VTI_LOCAL=1` builds that checkout's working tree instead (for
 development; tagged `:local` only). Images carry the label `org.buildathon.vti-ref`.
-**Digests.** They are in use now (`images.available` is `true`): `images:pull` and `up` pull by digest, and `pins:check` compares a pulled copy's digest and labels with the pin. If a digest is `null` (a pin advance that has not been published yet), the image is pulled by a movable tag and `pins:check` prints a `WARN`. After a workflow run, record the digests, and `images:verify` can check them against the signature ([VERIFY.md](VERIFY.md)).
+**Digests.** They are in use whenever `images.available` is `true` (it is `false` between a pin bump and the next publish, with every digest `null`, which is the designed state): `images:pull` and `up` pull by digest, and `pins:check` compares a pulled copy's digest and labels with the pin. If a digest is `null` (a pin advance that has not been published yet), the image is pulled by a movable tag and `pins:check` prints a `WARN`. After a workflow run, record the digests, and `images:verify` can check them against the signature ([VERIFY.md](VERIFY.md)).
 
 `pins:check` compares, per image, the label, the binary's own `--version`, that the release tag still resolves to the pinned ref, a running VTC's
 `/health` version, the lockfile against `pins.json`, and the newest upstream
@@ -53,12 +53,12 @@ with `npm run images:export` / `images:import` (`docker save` / `docker load`; [
 
 ## What is pinned now
 
-One ref: the 0.72 release commit is both `vta-service-v0.72.0` and `vtc-service-v0.20.0` (the earlier pins were two refs, matched to the Farm):
+One ref: the 0.83 release commit (`3ee07a12`) is both `vta-service-v0.83.0` and `vtc-service-v0.31.0` (the earlier pins were two refs, matched to the Farm):
 
 | Image | Tag | Ref | Why |
 |---|---|---|---|
-| `vta` | `vta-service-v0.72.0` | `26d0da81` | Advanced from 0.65.0 on 2026-11-04. **Not yet re-validated end to end, and not what the Farm ran when last observed (0.65.0).** |
-| `vtc` | `vtc-service-v0.20.0` | `26d0da81` | The VTC cut from the same release commit as the VTA. Previously 0.15.0 (`93d36996`), which a Farm VTC ran when observed. |
+| `vta` | `vta-service-v0.83.0` | `3ee07a12` | Advanced from 0.72.0 on 2026-11-20 by `pins:update`. **UNVERIFIED: the gate has not run, and the clients are known to need changes (see below). Not what the Farm ran when last observed (0.65.0).** |
+| `vtc` | `vtc-service-v0.31.0` | `3ee07a12` | The VTC cut from the same release commit as the VTA (was 0.20.0). The VTC Trust Task surface the kit uses is unchanged in this range (additive only). |
 
 For `MODE=tunnel` ([MODES.md](MODES.md)) there are more pins, in `pins.json` under `messaging`:
 
@@ -69,7 +69,7 @@ For `MODE=tunnel` ([MODES.md](MODES.md)) there are more pins, in `pins.json` und
 | `cloudflared` | validated 2024.6.1 (host binary, not pinned) | Quick tunnels. |
 | VTA build features | `setup,rest,didcomm,tsp,cli-synthesis,aws-secrets,webvh` | The VTI default has no `tsp`; the VTA then refuses `services.tsp = true`. |
 
-Farm participants must pick the image `0.72.0-26d0da81` (offered on ic3, verified 2026-11-08), never the portal default (0.56.0).
+Farm participants must pick an image the Farm offers that matches the pin; the last verified Farm image is `0.72.0-26d0da81` (ic3, 2026-11-08), which is **no longer this kit's pin** (the kit now targets 0.83.0), so the Farm path is unverified for this pin. Never the portal default (0.56.0).
 `npm run farm:check` and `farm:canary` compare the deployed agent's `/openapi.json` `info.version` with this pin and warn loudly.
 
 ## To do: version negotiation in the clients
@@ -79,6 +79,35 @@ The clients hard-code Trust Task versions (`vta-client`: `acl/grant/0.2`, `trust
 (trust-task discovery, or the OpenAPI document) and pick the highest common version, so one kit works across Farm
 releases (a 0.67 VTA already drops `acl/grant/0.1` and `trust-task-discovery/0.1`) instead of being fixed to one pin.
 Until then, the pins plus the canary's version warning are the guard.
+
+## Bump to 0.83/0.31: expected breakage
+
+Static survey only (nothing was run): this repo's hard-coded versions and config against the upstream source at the old and new pin
+(`git archive` of `26d0da81` and `3ee07a12`; dispatch tables in `vta-service/src/trust_tasks/mod.rs`, the `vti-specs-*` locks and bundles,
+the setup `from_toml.rs` files). **Hard break** = will fail; **additive** = new things only; **needs live verification** = a wire-protocol change
+in a client that was deliberately not guessed.
+
+| # | Finding | This repo | Upstream | Kind |
+|---|---|---|---|---|
+| 1 | The VTA no longer dispatches `acl/grant/0.2` (nor `acl/list/0.3`, `show`, `update`, `revoke`, `change-role` 0.2); only `acl/grant/0.3`, `list/0.4`, `show|update|revoke|change-role/0.3` | `packages/vta-client/src/client.ts:27` (`aclGrant`), `grantAcl` at :277, `grantHandoff` at :295, the approvals-demo grant at :318; `packages/status-panel/src/parse.ts:99` (doc example only) | `vta-service/src/trust_tasks/mod.rs:2607-2617` (old `:3837` served 0.2); `vti-specs-core/trust-tasks/acl/grant/0.3.bundle.json` | **Hard break, needs live verification.** Every `grantAcl` / `grantHandoff` (provisioning, `vtc:up`) fails with an unsupported-version refusal. In the 0.3 schema `AclEntry` gains a **required** `purposes` field (`{scope:"any"}` or `{scope:"listed", purposes:[...]}`), plus `purposes` error details. The new payload shape, and whether `{scope:"any"}` is the right value, is NOT guessed here: confirm against a live 0.83 VTA, then change `TASK.aclGrant` and the entry, and the fakes in the tests. |
+| 2 | `vtc-up.ts` grants the VTC's setup key with the hand-off marker over the same `acl/grant` | `scripts/vtc-up.ts:45`, `packages/vta-client/src/client.ts:296` | `acl.rs:330` (hand-off rollover rides `acl/grant`, now also behind the central PDP gate) | Same fix as 1; the hand-off `ext["org.openvtc.handoff"]` semantics need a live check |
+| 3 | VTC Dockerfile pinned `rust:1.95`; upstream now builds with a root `rust-toolchain.toml` (`1.100.0`, MSRV still 1.95.0) | `docker/vtc.Dockerfile` (`RUST_VERSION`) | `rust-toolchain.toml`, `Dockerfile:45` | **Fixed here** (`RUST_VERSION=1.100.0`, test in `scripts/test/bump-survey.test.ts`). Without it rustup would fetch 1.100.0 anyway at build time, slowly. |
+| 4 | New default VTA feature `webs` (did:webs, alpha); the kit's `features` list is explicit and does not include it | `pins.json vti.vta.features` | `vta-service/Cargo.toml` `default = [..., "webs"]` | Additive. Left out on purpose (the kit does not use did:webs); every feature in the list still exists. |
+| 5 | The VTA's own `FEATURES` default now reads `setup,rest,didcomm,cli-synthesis,aws-secrets,webvh` and `cli-synthesis` pulls `vta-cli-common`/`dialoguer` | `scripts/images-build.ts:143` | upstream `Dockerfile:80` | Additive, no change. |
+| 6 | VTA/VTC first-boot setup files: no key the entrypoints write was removed or renamed (`vta_name`, `admin_did`, `admin_label`, `[server] rate_limit_*`/`cors_origins`, `[secrets] backend = "plaintext"` (still sets `allow_plaintext`), `[messaging]`, `[services]`, `[vta_did]`; VTC `provision_transport`, `single_admin_mode`, `setup_key_file`, `[messaging]`) | `vta-entrypoint.sh:56-95`, `vtc-entrypoint.sh:60-80` | `vta-service/src/setup/from_toml.rs`, `vtc-service/src/setup/from_toml.rs` | Additive only (VTA `create_webs` DID kind, VTC `identity_method`, default `webvh`). `vtc setup --from`, `vtc acl add --did --role --label` and the `[cors]`/`[policy]` lines the entrypoints edit are unchanged. |
+| 7 | `vtc setup --from` no longer prints the admin key in non-interactive mode (prints `admin_key_file=`) | not used by the kit (the key is the kit's own) | `vtc-service/src/setup/from_toml.rs` (#2703) | Additive. |
+| 8 | VTA REST routes for acl/audit/config/contexts/did_templates/keys, `/bootstrap/provision-integration` and the `/api/trust-tasks` spelling were deleted | the kit's clients use `/trust-tasks` (VTA), `/v1/trust-tasks` (VTC), `/health`, `/.well-known/did.jsonl`, `/openapi.json` | `vta-service/src/deprecation.rs`, `routes/mod.rs:321` | None of the routes the kit calls is among them. `farm-lib.ts` still probes `/api/health`; it is a Farm-only fallback. |
+| 9 | `trust-task-discovery` is served at 0.3 and 0.4 | `packages/vta-client/src/client.ts:21` (0.3) | `mod.rs:2796-2798` | OK (additive). |
+| 10 | `task-consent/decision/0.2`, `task-consent/request/0.1`, `auth/authenticate/0.3`, `auth/whoami/0.1`, `vta/contexts/*/1.0`, `vta/webvh/*`, `keys/sign-document/0.1`, `vta/memory/{put,list}/0.1`, `rooms/keys/act/0.8`, `rooms/keys/{list,open,seal,present,key-package,welcome,commit}`, `messaging/ping/0.2` | `packages/vta-client`, `scripts/lib/tasks.ts`, `packages/rooms-client/src/tasks.ts`, `packages/tsp-client/src/ping.ts` | still dispatched in the new VTA (`mod.rs`) | Unchanged; newer versions added beside them (`memory/*` 0.2/0.3, `rooms/keys/act` 0.9-0.12, `rooms/keys/{list,open,seal}` 0.3). Additive. |
+| 11 | `vtc/*` tasks the kit sends (`join-requests`, `members`, `groups`, `directory`, `community`, `relationships`, `rooms/offers|memberships`) | `packages/vtc-client/src/index.ts:25-72` | `vti-specs-vtc/trust-tasks.lock`: every version pinned at 0.72/0.20 is still pinned; the additions are `vtc/badges/*` and similar (`vtc/networks/*` 0.1 no longer appears in the VTC source, which the kit does not use) | Additive for what the kit uses (the kit does not use `vtc/networks/*`). |
+| 12 | `rooms/*` (create, info, records, blobs, epoch, keys) gained versions (`create/0.3`, `info/0.4-0.5`, `records/get 0.3-0.4`, `list 0.6-0.8`, `put 0.5`, `keys/act 0.9-0.12`) and the room host marks older versions deprecated (`#[allow(deprecated)]` on `records/put/0.3`) | `packages/rooms-client/src/tasks.ts:8-34`, `packages/rooms-client/src/vta-keys.ts:59` (the 0.72.0 epoch quirk), `docs/ROOMS.md` | `room-host/src/files.rs`, `vti-specs-rooms` lock | **Needs live verification.** Old versions are still pinned, but deprecation can turn into removal; the 0.72 "commit tracker one epoch behind" workaround may be fixed or changed. |
+| 13 | The mediator: the 0.83 VTA lockfile names `affinidi-messaging-mediator` **0.52.0** (0.72 named 0.48.0, the kit's pin), `affinidi-tdk` 0.45, trust-tasks 0.39; new `messaging/wake/*` and `messaging/receipt/0.1` tasks (delivery receipts, mediator wake) | `pins.json messaging.mediator` (0.48.0, ref `e6e2c636`), `docker/mediator.Dockerfile`, `packages/tsp-client` | `Cargo.lock`, `vta-service/CHANGELOG.md` (#2741) | **Needs live verification (MODE=tunnel).** `pins:update` did not propose a mediator change, so it is unchanged; moving to 0.52.0 needs a commit pin and a tunnel run. TSP stays 1.0 (`affinidi-tsp` 0.3.0). |
+| 14 | New policy/approval machinery (central PDP gate on `acl/grant`, step-up) | `vta-entrypoint.sh:101-125` (the approvals demo edits `[policy]`) | `vta-config/src/lib.rs`, `trust_tasks/policy_gate.rs` | The `[policy]` field names used by the demo (`taskType`, `requires`, `approverSet`, `minApprovals`, `excludeRequester`) are unchanged. Whether the default policy gates the kit's own `acl/grant` needs the live gate. |
+| 15 | `@openvtc/trust-tasks` is 0.28.1 here; the upstream Rust crate is 0.39 | `pins.json npm` | `Cargo.lock` | Not comparable (different packages). Not changed. |
+
+What the gate will do: `images.available` is `false`, so `pins:verify --images auto` (and `.github/workflows/pins-gate.yml`) builds the VTA and VTC
+from the pinned refs; an explicit `--images pull` fails closed (null digests). The build should succeed; expect the gate to fail first at
+`vta:provision` / `vtc:up` on finding 1, which is the intended signal.
 
 ## Advancing (never automatic)
 
