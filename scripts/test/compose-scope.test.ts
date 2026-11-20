@@ -10,7 +10,7 @@ const ROOT = new URL("../../", import.meta.url).pathname;
 test("composeArgv names the project explicitly, derived from the given directory only", () => {
   const a = composeArgv("/work/openvti-starter", ["--profile", "vtc"], ["down", "-v", "--remove-orphans"]);
   assert.deepEqual(a, ["compose", "-p", "openvti-starter", "--profile", "vtc", "down", "-v", "--remove-orphans"]);
-  const b = composeFor("tunnel", true, ["down"], "/srv/dev/code/seas/openvti-starter-worktrees/bump-rename");
+  const b = composeFor("tunnel", true, ["down"], "/work/some-worktree/bump-rename");
   assert.equal(b[1], "-p");
   assert.equal(b[2], "bump-rename");
   assert.notEqual(b[2], "bamvtilive");

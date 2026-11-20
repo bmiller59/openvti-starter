@@ -40,7 +40,7 @@ function upstream(vta: string, vtc: string, sameCommit = true) {
 }
 
 test("a newer matched pair proposes tag, version and ref for both; nothing blocks on a clean tree", () => {
-  const pl = plan({ pins: real(), lsRemote: () => upstream("0.80.0", "0.30.0"), ...clean });
+  const pl = plan({ pins: real(), lsRemote: () => upstream("0.99.0", "0.40.0"), ...clean });
   assert.equal(pl.updateAvailable, true);
   assert.deepEqual(applyBlockers(pl), []);
   assert.deepEqual(pl.changes.map((c) => c.what).sort(), ["vti.vta.ref", "vti.vta.tag", "vti.vta.version", "vti.vtc.ref", "vti.vtc.tag", "vti.vtc.version"]);
@@ -55,15 +55,15 @@ test("already current: no changes, no update available", () => {
 });
 
 test("blockers: dirty tree, split commits, missing tag, downgrade, bad schema, upstream unreachable", () => {
-  assert.match(applyBlockers(plan({ pins: real(), lsRemote: () => upstream("0.80.0", "0.30.0"), dirty: " M x", today: "t" })).join(), /not clean/);
-  assert.match(plan({ pins: real(), lsRemote: () => upstream("0.80.0", "0.30.0", false), ...clean }).blockers.join(), /different commits/);
-  assert.match(plan({ pins: real(), lsRemote: () => upstream("0.80.0", "0.30.0"), vtaTag: "vta-service-v9.9.9", ...clean }).blockers.join(), /vta-service-v9\.9\.9 not found/);
+  assert.match(applyBlockers(plan({ pins: real(), lsRemote: () => upstream("0.99.0", "0.40.0"), dirty: " M x", today: "t" })).join(), /not clean/);
+  assert.match(plan({ pins: real(), lsRemote: () => upstream("0.99.0", "0.40.0", false), ...clean }).blockers.join(), /different commits/);
+  assert.match(plan({ pins: real(), lsRemote: () => upstream("0.99.0", "0.40.0"), vtaTag: "vta-service-v9.9.9", ...clean }).blockers.join(), /vta-service-v9\.9\.9 not found/);
   assert.match(plan({ pins: real(), lsRemote: () => "", ...clean }).blockers.join(), /no vta-service-v/);
   const down = plan({ pins: real(), lsRemote: () => ls([["vta-service-v0.50.0", A], ["vtc-service-v0.10.0", A]]), ...clean });
-  assert.match(down.blockers.join(), /vta 0\.72\.0 -> 0\.50\.0 is a downgrade/);
+  assert.match(down.blockers.join(), /vta 0\.83\.0 -> 0\.50\.0 is a downgrade/);
   assert.deepEqual(plan({ pins: real(), lsRemote: () => ls([["vta-service-v0.50.0", A], ["vtc-service-v0.10.0", A]]), allowDowngrade: true, ...clean }).blockers, []);
   const bad = real(); bad.vti.vta.ref = "x";
-  assert.match(plan({ pins: bad, lsRemote: () => upstream("0.80.0", "0.30.0"), ...clean }).blockers.join(), /schema/);
+  assert.match(plan({ pins: bad, lsRemote: () => upstream("0.99.0", "0.40.0"), ...clean }).blockers.join(), /schema/);
   const boom = plan({ pins: real(), lsRemote: () => { throw new Error("offline"); }, ...clean });
   assert.match(boom.blockers.join(), /could not list upstream tags.*offline/);
 });
@@ -76,7 +76,7 @@ test("a tag that moved upstream (same version, different commit) is a blocker", 
 
 test("mediator: by tag (resolved upstream), by commit with a version, and refusals", () => {
   const p = real();
-  const lsr = (repo: string) => repo === p.messaging.mediator.repo ? ls([["v0.49.0", B]]) : upstream("0.80.0", "0.30.0");
+  const lsr = (repo: string) => repo === p.messaging.mediator.repo ? ls([["v0.49.0", B]]) : upstream("0.99.0", "0.40.0");
   const byTag = plan({ pins: p, lsRemote: lsr, mediator: { ref: "v0.49.0" }, ...clean });
   assert.deepEqual(byTag.mediator, { ref: B, version: "0.49.0" });
   assert.match(plan({ pins: p, lsRemote: lsr, mediator: { ref: "v0.99.0" }, ...clean }).blockers.join(), /mediator tag v0\.99\.0 not found/);
@@ -88,11 +88,11 @@ test("mediator: by tag (resolved upstream), by commit with a version, and refusa
 
 test("applyPlan rewrites only the pinned keys, keeps the file's formatting, and stays valid", () => {
   const p = real();
-  const pl = plan({ pins: p, lsRemote: (r) => r === p.messaging.mediator.repo ? ls([["v0.49.0", B]]) : upstream("0.80.0", "0.30.0"), mediator: { ref: "v0.49.0" }, ...clean });
+  const pl = plan({ pins: p, lsRemote: (r) => r === p.messaging.mediator.repo ? ls([["v0.49.0", B]]) : upstream("0.99.0", "0.40.0"), mediator: { ref: "v0.49.0" }, ...clean });
   const out = applyPlan(text, pl, "2030-01-02");
   const n = JSON.parse(out) as Pins;
-  assert.equal(n.vti.vta.tag, "vta-service-v0.80.0");
-  assert.equal(n.vti.vtc.version, "0.30.0");
+  assert.equal(n.vti.vta.tag, "vta-service-v0.99.0");
+  assert.equal(n.vti.vtc.version, "0.40.0");
   assert.equal(n.vti.vta.ref, A);
   assert.equal(n.vti.pinnedOn, "2030-01-02");
   assert.match(n.vti.why, /UNVERIFIED/);
@@ -119,9 +119,9 @@ test("follow-up lists the gate commands; the log entry is marked UNVERIFIED and 
   const f = followUp();
   for (const c of ["images:build", "up", "e2e", "test:roles", "hello"]) assert.ok(f.includes(c), c);
   const p = real();
-  const pl = plan({ pins: p, lsRemote: () => upstream("0.80.0", "0.30.0"), ...clean });
-  const e = unverifiedLogEntry(pl, { vta: "0.72.0", vtc: "0.20.0", mediator: "0.48.0" }, "2030-01-02");
-  assert.match(e, /^- \*\*2030-01-02\*\* · .*VTA 0\.72\.0 -> 0\.80\.0.*UNVERIFIED/);
+  const pl = plan({ pins: p, lsRemote: () => upstream("0.99.0", "0.40.0"), ...clean });
+  const e = unverifiedLogEntry(pl, { vta: "0.83.0", vtc: "0.31.0", mediator: "0.48.0" }, "2030-01-02");
+  assert.match(e, /^- \*\*2030-01-02\*\* · .*VTA 0\.83\.0 -> 0\.99\.0.*UNVERIFIED/);
   assert.equal(appendLog("a\nb", e), `a\nb\n${e}\n`);
   assert.equal(appendLog("a\n", e), `a\n${e}\n`);
 });
@@ -142,7 +142,7 @@ test("pins:verify gate: ordered bounded steps, stops at the first failure, summa
   assert.deepEqual(ran2, ["images:build", "up", "e2e"]);
   assert.match(summarize(bad.results), /TIMEOUT\s+e2e/);
   const line = verifiedLogLine(real(), "2030-01-02");
-  assert.match(line, /^- \*\*2030-01-02\*\* · Pins verified: VTA `vta-service-v0\.72\.0`/);
+  assert.match(line, /^- \*\*2030-01-02\*\* · Pins verified: VTA `vta-service-v0\.83\.0`/);
   assert.ok(!line.includes("UNVERIFIED"));
 });
 

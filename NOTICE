@@ -16,7 +16,7 @@ pins.json, and are distributed under the licences of that software:
 
 - vta and vtc: OpenVTC/verifiable-trust-infrastructure
   (https://github.com/OpenVTC/verifiable-trust-infrastructure, Apache-2.0), at commit
-  26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f (vta-service-v0.72.0, vtc-service-v0.20.0).
+  3ee07a12291c6e08b254bb1cff18d19865f79057 (vta-service-v0.83.0, vtc-service-v0.31.0).
 - mediator: affinidi-messaging-mediator
   (https://github.com/affinidi/affinidi-messaging-mediator, Apache-2.0, with its own NOTICE.txt), at
   commit e6e2c63654bb43bb7feb732834702cd940b2bcce (v0.48.0).

@@ -138,20 +138,20 @@ Everything below is how the prebuilt images work now that `images.available` is 
 `pins.json` stays the single source of truth. Every image has two tags, both derived from its pin (one helper, `scripts/lib/image-tags.ts`, used by `images:build`, `images:pull` and `npm run clean`):
 
 - `<ref8>`: the first 8 characters of the pinned upstream commit.
-- `<version>-<ref8>`: the pinned version plus that, e.g. `0.72.0-26d0da81`.
+- `<version>-<ref8>`: the pinned version plus that, e.g. `0.83.0-3ee07a12`.
 
 There is **no `latest`**: a moving tag defeats pinning. The digest in `pins.json` is the verified reference; tags are labels for people.
 
 | Image | Name | Pin | Tags | Registry example |
 |---|---|---|---|---|
-| VTA | `vta` | `vti.vta` (0.72.0) | `26d0da81`, `0.72.0-26d0da81` | `ghcr.io/bmiller59/vta:0.72.0-26d0da81` |
-| VTC | `vtc` | `vti.vtc` (0.20.0) | `26d0da81`, `0.20.0-26d0da81` | `ghcr.io/bmiller59/vtc:0.20.0-26d0da81` |
+| VTA | `vta` | `vti.vta` (0.83.0) | `3ee07a12`, `0.83.0-3ee07a12` | `ghcr.io/bmiller59/vta:0.83.0-3ee07a12` |
+| VTC | `vtc` | `vti.vtc` (0.31.0) | `3ee07a12`, `0.31.0-3ee07a12` | `ghcr.io/bmiller59/vtc:0.31.0-3ee07a12` |
 | mediator | `mediator` | `messaging.mediator` (0.48.0) | `e6e2c636`, `0.48.0-e6e2c636` | `ghcr.io/bmiller59/mediator:0.48.0-e6e2c636` |
 
 Where each tag exists:
 
 - **Built locally** (`images:build`): `<name>:<ref8>`, `<name>:<version>-<ref8>` and `<name>:local`. A `VTI_LOCAL=1` working-tree build is only `:local`.
-- **Pulled** (`images:pull`): pulled by digest, then, only when the image reports exactly the pinned digest, tagged locally `<name>:<ref8>` and `<name>:<version>-<ref8>` (the mediator included, so it needs no hand-tagging; running the pull again re-applies the tags to an image that is already here). A pulled image is **never** tagged `:local`: that tag means "built here by `images:build`", `IMAGES=local` keeps meaning that, and a pull must not overwrite your own build. `npm run up` does not need `:local` for a pulled image: it runs the pinned digest reference. (Plain `docker compose up` outside `npm run up` falls back to `:local`; set `VTA_IMAGE=vta:0.72.0-26d0da81` etc., or build.) A pin without a recorded digest is pulled by tag, unverified, and is not tagged locally.
+- **Pulled** (`images:pull`): pulled by digest, then, only when the image reports exactly the pinned digest, tagged locally `<name>:<ref8>` and `<name>:<version>-<ref8>` (the mediator included, so it needs no hand-tagging; running the pull again re-applies the tags to an image that is already here). A pulled image is **never** tagged `:local`: that tag means "built here by `images:build`", `IMAGES=local` keeps meaning that, and a pull must not overwrite your own build. `npm run up` does not need `:local` for a pulled image: it runs the pinned digest reference. (Plain `docker compose up` outside `npm run up` falls back to `:local`; set `VTA_IMAGE=vta:0.83.0-3ee07a12` etc., or build.) A pin without a recorded digest is pulled by tag, unverified, and is not tagged locally.
 - **Tags in use are never moved.** Before `images:pull` or `images:build` points a tag at a different image, the kit asks Docker (read-only: `docker image inspect`, `docker ps -a`) whether any container, running or stopped, of any compose project, was created from the image the tag points to now. If so the tag is left alone and the output names the containers (name and compose project) and the way on: use the unique `<version>-<ref8>` tag or the pinned digest, stop those containers and re-run, or pass `--force`. `images:build` refuses before it starts building; `images:pull` skips only that tag, reports it, and still succeeds, because `up` and `images:verify` use the pinned digest reference (`<registry>/<name>@sha256:...`), which does not depend on any short tag. A tag that already points at the pulled image is never a move, so re-running a pull is always fine.
 - **In the registry**: the publish workflow pushes both tags on the same multi-arch index from now on. The images published on 2026-11-20 carry only the `<ref8>` tag; the next publish adds `<version>-<ref8>`. Until then, refer to a published image by its digest (what `images:pull` does) or by `<ref8>`.
 - **`npm run clean`** treats both forms of the current pin as kept, and both forms of any older pin as superseded.

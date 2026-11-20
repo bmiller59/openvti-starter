@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { farmImageTag, pins } from "./pins.js";
 import { env, LOCAL_VTC_URL } from "./env.js";
-import { checkImageLabels, IMAGE_KINDS, imagesAvailable, imageSpecs, NO_DIGEST_WARNING, parseImagesMode, undigested } from "./lib/images.js";
+import { checkImageLabels, availabilityProblems, IMAGE_KINDS, imagesAvailable, imageSpecs, NO_DIGEST_WARNING, parseImagesMode, undigested } from "./lib/images.js";
 
 const p = pins();
 let drift = 0;
@@ -85,8 +85,9 @@ for (const [name, pin] of imgs) {
 let warnings = 0;
 try {
   const missing = undigested(imageSpecs(p, process.env.IMAGE_REGISTRY));
+  for (const m of availabilityProblems(p)) out(false, "prebuilt images", m);
   if (!imagesAvailable(p)) {
-    out(null, "prebuilt images", `not available (pins.json images.available is false): everyone builds locally, so digests${missing.length ? " (none recorded for " + missing.join(", ") + ")" : ""} are not in use; they stay in pins.json for when packages can be public`);
+    out(null, "prebuilt images", `not available (pins.json images.available is false): everyone builds locally, so digests${missing.length ? " (none recorded for " + missing.join(", ") + ")" : ""} are not in use until the pinned images are published (docs/IMAGES.md)`);
   } else if (missing.length) {
     warnings++;
     console.log(`WARN  ${"prebuilt images by tag".padEnd(34)} no digest in pins.json for: ${missing.join(", ")}. ${NO_DIGEST_WARNING}`);

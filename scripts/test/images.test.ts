@@ -5,7 +5,7 @@ import {
 } from "../lib/images.js";
 import { buildLabels, labelArgs, DOCKERFILE_LABEL, NO_DIGEST_WARNING, pullTarget, undigested } from "../lib/images.js";
 import { pins, type Pins } from "../pins.js";
-import { imagesAvailable, UNAVAILABLE_NOTE } from "../lib/images.js";
+import { availabilityProblems, imagesAvailable, UNAVAILABLE_NOTE } from "../lib/images.js";
 
 const withDigest = (digests: Partial<Record<ImageKind, string | null>>): Pins => {
   const p = pins();
@@ -268,12 +268,27 @@ test("pullTarget: a recorded digest is always pulled by digest; --by-digest refu
 
 // --- images.available (pins.json): the single switch --------------------------------------------------------
 
-test("pins.json: images.available is a boolean (true since the verified 2026-11-20 publish) with a one-line why", () => {
+test("pins.json: images.available is a boolean (false while the 0.83/0.31 pin awaits publishing under the new names) with a one-line why", () => {
   const i = pins().images;
   assert.equal(typeof i.available, "boolean");
-  assert.equal(i.available, true, "the images are public and images:verify passed; flip to false only to force local builds");
+  assert.equal(i.available, false, "set true only after publish, public packages, recorded digests and images:verify");
   assert.ok(i.why.length > 20 && !i.why.includes("\n"));
-  assert.equal(imagesAvailable(pins()), true);
+  assert.equal(imagesAvailable(pins()), false);
+  for (const k of ["vta", "vtc", "mediator"] as const) assert.equal(i[k].digest, null, `${k}: digests come from the next publish, never invented`);
+  assert.deepEqual(availabilityProblems(pins()), []);
+});
+
+test("availabilityProblems: available=true needs the VTA and VTC digests; available=false with null digests is the designed state", () => {
+  const p = pins();
+  p.images.available = true;
+  assert.equal(availabilityProblems(p).length, 2);
+  p.images.vta.digest = "sha256:" + "a".repeat(64);
+  assert.equal(availabilityProblems(p).length, 1);
+  p.images.vtc.digest = "sha256:" + "b".repeat(64);
+  assert.deepEqual(availabilityProblems(p), []);
+  p.images.available = false;
+  p.images.vta.digest = null;
+  assert.deepEqual(availabilityProblems(p), []);
 });
 
 test("available=false: auto behaves like local, never pulls, never names a registry tag", () => {

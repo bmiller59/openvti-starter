@@ -1,27 +1,27 @@
 {
-  "updated": "2026-10-29",
+  "updated": "2026-11-20",
   "note": "Pins are the versions this kit was last validated against. Advance only deliberately via the procedure in docs/PINS.md, and log why in PINS_LOG.md. npm versions are exact (see .npmrc) and package-lock.json is committed.",
   "vti": {
     "repo": "https://github.com/OpenVTC/verifiable-trust-infrastructure",
     "vta": {
       "image": "vta",
-      "tag": "vta-service-v0.72.0",
-      "ref": "26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f",
-      "version": "0.72.0",
+      "tag": "vta-service-v0.83.0",
+      "ref": "3ee07a12291c6e08b254bb1cff18d19865f79057",
+      "version": "0.83.0",
       "service": "vta-service",
       "features": "setup,rest,didcomm,tsp,cli-synthesis,aws-secrets,webvh",
       "featuresNote": "The VTI Dockerfile default has no `tsp`, and the VTA then refuses services.tsp = true (MODE=tunnel). images:build passes this list as the FEATURES build arg for every VTA image, so one image serves all modes."
     },
     "vtc": {
       "image": "vtc",
-      "tag": "vtc-service-v0.20.0",
-      "ref": "26d0da81a1ae2df800ee6b9c1806bb3c3c7a9d2f",
-      "version": "0.20.0",
+      "tag": "vtc-service-v0.31.0",
+      "ref": "3ee07a12291c6e08b254bb1cff18d19865f79057",
+      "version": "0.31.0",
       "service": "vtc-service"
     },
-    "pinnedOn": "2026-11-04",
-    "why": "Advanced to the 0.72 release (vta-service-v0.72.0). The VTC is the release cut from the same commit (vtc-service-v0.20.0), so both images build from one ref. The earlier pins (VTA fc157f76 / 0.65.0 and VTC 93d36996 / 0.15.0) matched the VTA Farm; the Farm is NOT yet re-validated against 0.72.",
-    "note": "Both pins are release commit 26d0da81 (chore: release #2411). Not yet re-verified end to end: see PINS_LOG.md."
+    "pinnedOn": "2026-11-20",
+    "why": "Advanced to vta-service-v0.83.0 and vtc-service-v0.31.0 (commit 3ee07a12) by npm run pins:update. UNVERIFIED: the gate (docs/PINS.md) has not been run yet.",
+    "note": "Both pins are release commit 3ee07a12. Not yet re-verified end to end: see PINS_LOG.md and the expected-breakage list in docs/PINS.md."
   },
   "messaging": {
     "pinnedOn": "2026-10-29",
@@ -45,8 +45,8 @@
     "note": "Advance only deliberately via docs/PINS.md. The mediator is open-ACL in this kit by design (docs/MODES.md)."
   },
   "images": {
-    "available": true,
-    "why": "The packages under ghcr.io/bmiller59 are public and were published by images.yml on 2026-11-20 (see PINS_LOG.md), so participants can pull prebuilt images (npm run images:pull); building locally (npm run images:build) remains the fallback. Set true only when the packages are public and npm run images:verify passes.",
+    "available": false,
+    "why": "The new pin (VTA 0.83.0 / VTC 0.31.0, commit 3ee07a12) and the renamed images (vta, vtc, mediator) are not published yet: images.yml has not run for them, so there are no digests to record. The kit builds locally (npm run images:build) until the images are published, made public, their digests recorded here and npm run images:verify passes; then set this true (docs/IMAGES.md).",
     "registry": "ghcr.io/bmiller59",
     "platforms": ["linux/amd64", "linux/arm64"],
     "note": "Prebuilt images published by .github/workflows/images.yml to <registry>/<image>:<short ref> (the image names and refs are the vti/messaging pins above). `digest` is the multi-arch index digest (sha256:...) that the workflow reports after a run; null means not published yet (or not recorded), and then the tag is used and `pins:check` says so. Paste the digests in, commit, and `images:pull` / `up` pull by digest. Procedure: docs/IMAGES.md.",
@@ -56,9 +56,9 @@
       "issuer": "https://token.actions.githubusercontent.com",
       "note": "Who must have built and signed the published images: this repository's images workflow, via GitHub OIDC. `npm run images:verify` checks exactly this (GitHub attestation and cosign signature). A fork that publishes its own images sets IMAGE_REGISTRY and VERIFY_REPO. The workflow's first real runs were on 2026-11-20 (PINS_LOG.md); what images:verify reported is recorded in docs/VERIFY.md."
     },
-    "vta": { "digest": "sha256:16deba5b65a2b1722b9ea4f02ea2b49649d05353e2cee6cdcdbd23716fe80efa" },
-    "vtc": { "digest": "sha256:aa4a7870ed75cd5822ff63c2ee213b5c2a35a4d1fa17233e4272865dc70deac9" },
-    "mediator": { "digest": "sha256:2e916d1801a678717d8168495eb9ed4a4f955d26f1eb004eae8b05f3787fdc2f" }
+    "vta": { "digest": null },
+    "vtc": { "digest": null },
+    "mediator": { "digest": null }
   },
   "farm": {
     "observedOn": "2026-10-29T18:38Z",

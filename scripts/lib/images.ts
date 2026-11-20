@@ -20,6 +20,15 @@ export type ImagesMode = "auto" | "local" | "registry";
 /** pins.json images.available: can participants pull the prebuilt images? (docs/IMAGES.md) */
 export const imagesAvailable = (p: Pins): boolean => p.images.available === true;
 
+/**
+ * pins.json consistency: `available: true` promises participants a verified pull, so the VTA and VTC (what the gate pulls) must then
+ * have a recorded digest. `available: false` with null digests is the designed state between a pin bump and the next publish.
+ */
+export function availabilityProblems(p: Pins): string[] {
+  if (!imagesAvailable(p)) return [];
+  return (["vta", "vtc"] as const).filter((k) => !p.images[k].digest).map((k) => `images.available is true but images.${k}.digest is null: record the digest from the publish run, or set available to false`);
+}
+
 /** Said wherever a prebuilt image is asked for while `available` is false. */
 export const UNAVAILABLE_NOTE = "Prebuilt images are not generally available yet (pins.json images.available is false), so the kit builds them locally. IMAGES=registry is for trying the registry anyway if your account can pull the packages (docker login ghcr.io first); docs/IMAGES.md.";
 
