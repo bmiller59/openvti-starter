@@ -1,7 +1,7 @@
 # Publish the prebuilt container images (VTA, VTC, mediator) to GHCR. Procedure and first-run steps: docs/IMAGES.md.
 #
-# STATUS: written and statically checked (YAML parse, tests in scripts/test/images-workflow.test.ts) but NEVER RUN.
-# The first run is the real test; expect to fix something. Use a dry run first (push: false, below).
+# STATUS: written, statically checked (YAML parse, tests in scripts/test/images-workflow.test.ts) and run: a real run
+# succeeded on 2026-10-30, and dry runs of vta and vtc (push: false, below) passed since. Use a dry run first after any change.
 #
 # What it does
 #   plan   reads pins.json (single source of truth: refs, features, registry, platforms) and builds the matrix.
