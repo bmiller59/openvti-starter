@@ -11,8 +11,8 @@ Or to skip all trust and build it yourself and compare.
 > Dockerfile hash; labels say what the builder wrote, not what is inside) and `npm run images:compare`; the real check is that you built it from the pinned ref, which `images:build` does with `git archive`.
 > A shared tar is as trustworthy as whoever made it. **Signed prebuilt images are future**: the rest of this page describes them for when packages can be public (or for organisation members using `IMAGES=registry`).
 >
-> **Status of that future path, stated plainly.** The signing steps are **written but have never run on GitHub**. Until the images workflow has run
-> for real, there is no signature or attestation to check, `pins.json` records no digests (apart from one VTA digest recorded after a publish run), and `npm run images:verify` will say
+> **Status of that future path, stated plainly.** The signing steps ran once on GitHub (the real run of 2026-10-30 pushed the mediator to the old organisation registry with `attest` and `sign` succeeding; VTA and VTC dry runs passed on 2026-11-20), but no output has been checked with `images:verify`. Until it has been run
+> for the current registry, there is no signature or attestation to check, `pins.json` records no digests (apart from one VTA digest recorded after a publish run), and `npm run images:verify` will say
 > `INCOMPLETE` (published image) rather than `VERIFIED`. What is tested without GitHub: the verification logic against mocked
 > `gh`/`cosign`/`docker` output, the workflow's structure and permissions, and the label format. What is **not** yet observed: that
 > the attest and sign jobs succeed, that the real `gh attestation verify` / `cosign verify` output matches what the command

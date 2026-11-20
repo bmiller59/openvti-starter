@@ -19,8 +19,8 @@
 #                                        the VTI repository at the exact pinned commit. A cold Rust build is slow (25 to 40
 #                                        minutes per image on a good machine), so the job timeout is long.
 #
-# Runner limits: a GitHub-hosted ubuntu-24.04 runner has 4 vCPU, 16 GB RAM and little free disk. The docs ask for several GB of
-# RAM and about 10 GB of disk for the images; the build needs more than the runner offers by default, so the job frees disk
+# Runner limits: a GitHub-hosted ubuntu-24.04 runner in a public repo has 4 vCPU, 16 GB RAM and 14 GB SSD. The docs ask for 20 GB
+# or more of free disk and 8 GB of RAM (docs/IMAGES.md#build-requirements); the build needs more than the runner offers by default, so the job frees disk
 # (removes preinstalled toolchains) and adds 16 GB of swap on /mnt, the same measure as images.yml.
 # Not done: a Docker layer cache (buildx gha cache). images:build drives its own buildx builder and does not take cache flags,
 # so every build-mode run is a cold build until the images are published (images.available) and the gate pulls instead.
@@ -161,7 +161,7 @@ jobs:
           done
           echo "VTI_PATH=$src" >> "$GITHUB_ENV"
 
-      # BUILD_MEMORY / BUILD_CPUS raise images:build's default cap (6g, a quarter of the cores) to what the runner has; the swap above
+      # BUILD_MEMORY / BUILD_CPUS raise images:build's default cap (half the engine RAM, 6g to 12g, and a quarter of the cores) to what the runner has; the swap above
       # backs it. Both are ignored in pull mode.
       - name: Run the gate (pins:verify)
         run: |

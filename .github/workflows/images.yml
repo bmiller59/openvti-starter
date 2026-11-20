@@ -19,8 +19,10 @@
 #   digests  one artifact and a job summary with the digests, ready to paste into pins.json (images.<kind>.digest).
 #            It runs only after attest and sign succeeded, so a digest is never offered unsigned.
 #
-# Supply-chain verification (docs/VERIFY.md, `npm run images:verify`): STATUS UNVERIFIED. The attest and sign jobs have
-# never run on GitHub; nothing here is proven until a real run is checked with `npm run images:verify`.
+# Supply-chain verification (docs/VERIFY.md, `npm run images:verify`): a real push run (41130721784, 2026-10-30) built the
+# mediator 0.45.0 and pushed it to the OLD organisation registry, ghcr.io/mickens-lab, and its attest and sign jobs succeeded.
+# The VTA and VTC dry runs (push: false) passed on 2026-11-20. Not yet verified: `npm run images:verify` against that output,
+# and any run against the current registry.
 #
 # Triggers: manual (Actions tab > images > Run workflow) or pushing a tag named images-* (for example images-2026-11-01).
 #   Manual inputs: images (all|vta|vtc|mediator), push (false = build and smoke-test only, push nothing),
@@ -32,9 +34,10 @@
 # they run NO upstream or build code: the cargo build happens in the build job, which has neither permission.
 # Every action is pinned to a full commit SHA (the comment names the release); bump them deliberately.
 #
-# Timeouts, honestly (estimates, NOT measured on these runners):
-#   The mediator took about 12 minutes cold on a 12-core desktop, the VTA and VTC similar. GitHub's standard public
-#   runners have 4 vCPUs and 16 GB, so expect roughly 25 to 45 minutes per image. The job timeouts (90 / 90 / 120 minutes)
+# Timeouts: measured on these runners (docs/IMAGES.md#build-requirements):
+#   The mediator took about 12 minutes cold on a 12-core desktop, the VTA and VTC 12 to 25. GitHub's standard runners in a
+#   public repository have 4 vCPUs, 16 GB RAM and 14 GB SSD (2 vCPUs and 8 GB in a private one); the dry runs 44659883519 and
+#   44663168210 took about 26 to 29 minutes per build leg with a 12g cap and 16 GB swap. The job timeouts (90 / 90 / 120 minutes)
 #   leave about 2 to 3 times that headroom, so a hung job is stopped without eating the whole 6-hour default.
 #   Build legs run in parallel, so the whole run should take about as long as the slowest leg.
 #   arm64 on the native ubuntu-24.04-arm runner is expected to be as fast as amd64. If that runner is unavailable to the
