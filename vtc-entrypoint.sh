@@ -1,7 +1,7 @@
 #!/bin/sh
 # First boot: phase 1 (mint a setup did:key), wait for the VTA grant, phase 2
 # (`vtc setup --from`), seed the admin ACL, add CORS. Later boots just serve.
-# DEV ONLY (plaintext secrets). Verified end to end against vtc-service 0.15.0: see docs/VTC.md.
+# DEV ONLY (plaintext secrets). Verified end to end against vtc-service 0.20.0: see docs/VTC.md.
 #
 # MODE=tunnel: PUBLIC_HOST (the VTC's quick-tunnel host), MEDIATOR_DID and MEDIATOR_HOST are set by
 # `npm run up`; the VTC advertises tsp + didcomm through that mediator.

@@ -79,9 +79,9 @@ Everything below is how prebuilt images are meant to work once `images.available
 
 | Image | Name | Tag from | Example |
 |---|---|---|---|
-| VTA | `vta-buildathon` | `vti.vta.ref` | `ghcr.io/mickens-lab/vta-buildathon:26d0da81` |
-| VTC | `vtc-buildathon` | `vti.vtc.ref` | `ghcr.io/mickens-lab/vtc-buildathon:26d0da81` |
-| mediator | `mediator-buildathon` | `messaging.mediator.ref` | `ghcr.io/mickens-lab/mediator-buildathon:e6e2c636` |
+| VTA | `vta-buildathon` | `vti.vta.ref` | `ghcr.io/bmiller59/vta-buildathon:26d0da81` |
+| VTC | `vtc-buildathon` | `vti.vtc.ref` | `ghcr.io/bmiller59/vtc-buildathon:26d0da81` |
+| mediator | `mediator-buildathon` | `messaging.mediator.ref` | `ghcr.io/bmiller59/mediator-buildathon:e6e2c636` |
 
 `pins.json` `images.<kind>.digest` (initially `null`) is the multi-arch index digest. Once recorded, `images:pull` and `up` pull by
 digest (`<registry>/<name>@sha256:...`), so a moved tag cannot change what runs. Until it is recorded they pull by tag and

@@ -93,27 +93,27 @@ The easy way is `npm run images:verify`. It does the following, and you can do e
 ```sh
 # 1. The digest you have is the digest pins.json records (the digest is the identity; the tag is a hint)
 jq -r '.images.vta.digest' pins.json
-docker image inspect ghcr.io/mickens-lab/vta-buildathon:26d0da81 --format '{{json .RepoDigests}}'
+docker image inspect ghcr.io/bmiller59/vta-buildathon:26d0da81 --format '{{json .RepoDigests}}'
 
 # 2. The GitHub attestation: signed by this repository's images workflow
 DIGEST=$(jq -r '.images.vta.digest' pins.json)          # "null" until the digests are recorded
-gh attestation verify "oci://ghcr.io/mickens-lab/vta-buildathon@$DIGEST" \
-  --repo Mickens-Lab/openvti-starter \
-  --signer-workflow Mickens-Lab/openvti-starter/.github/workflows/images.yml
+gh attestation verify "oci://ghcr.io/bmiller59/vta-buildathon@$DIGEST" \
+  --repo bmiller59/openvti-starter \
+  --signer-workflow bmiller59/openvti-starter/.github/workflows/images.yml
 
 # 3. The cosign signature, with the exact identity and issuer (the workflow on main, or an images-* tag)
-cosign verify "ghcr.io/mickens-lab/vta-buildathon@$DIGEST" \
-  --certificate-identity-regexp '^https://github\.com/Mickens-Lab/openvti-starter/\.github/workflows/images\.yml@refs/(heads/main|tags/images-.+)$' \
+cosign verify "ghcr.io/bmiller59/vta-buildathon@$DIGEST" \
+  --certificate-identity-regexp '^https://github\.com/bmiller59/openvti-starter/\.github/workflows/images\.yml@refs/(heads/main|tags/images-.+)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 4. The labels: what the image says it was built from
-docker image inspect ghcr.io/mickens-lab/vta-buildathon:26d0da81 --format '{{json .Config.Labels}}' | jq
+docker image inspect ghcr.io/bmiller59/vta-buildathon:26d0da81 --format '{{json .Config.Labels}}' | jq
 jq '.vti.vta | {ref, features}' pins.json      # org.buildathon.vti-ref and org.buildathon.vta-features must equal these
 
 # 5. The SBOM of your platform's image (the per-platform digest is inside the index)
-docker buildx imagetools inspect "ghcr.io/mickens-lab/vta-buildathon@$DIGEST"      # lists one digest per platform
-gh attestation verify "oci://ghcr.io/mickens-lab/vta-buildathon@<platform digest>" \
-  --repo Mickens-Lab/openvti-starter --predicate-type https://spdx.dev/Document/v2.3 --format json \
+docker buildx imagetools inspect "ghcr.io/bmiller59/vta-buildathon@$DIGEST"      # lists one digest per platform
+gh attestation verify "oci://ghcr.io/bmiller59/vta-buildathon@<platform digest>" \
+  --repo bmiller59/openvti-starter --predicate-type https://spdx.dev/Document/v2.3 --format json \
   | jq '.[0].verificationResult.statement.predicate | {spdxVersion, packages: (.packages | length)}'
 ```
 

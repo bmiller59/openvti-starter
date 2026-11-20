@@ -22,7 +22,7 @@ Farm-side bug, 2026-10-29). Organisers run `npm run farm:probe` plus a canary ag
 day before and on the day (ic3 first, then firstperson), and use local mode for everyone if both fail ([docs/EVENT.md](EVENT.md), [docs/FARM.md](FARM.md)).
 Browser apps work in farm mode through the Vite proxy in each template. Tunnel mode turns DIDComm/TSP on. A TSP client (`npm run tsp:ping`, `templates/tsp-ping`) sends a signed ping to the VTA through the kit's mediator and gets the pong back, and `npm run tsp:listen` receives the credential frames the VTC pushes after an approval; both **verified live** in tunnel mode (a wallet storing the credential, DIDComm and a Farm mediator are not: [docs/MESSAGING.md](MESSAGING.md)).
 A VTC (community) is described in [docs/VTC.md](VTC.md): the client is ready,
-the local Docker VTC (vtc-service 0.15.0, the version the Farm VTC runs) was **verified live** (join, approve, restart, browser; a member cannot get a console session by design, but the sessionless member surface was mapped and verified: docs/VTC-SURFACE.md), the farm community path needs the portal and is unverified.
+the local Docker VTC (vtc-service 0.15.0 when first verified, the version the Farm VTC ran then; the pin is now 0.20.0, re-verified below) was **verified live** (join, approve, restart, browser; a member cannot get a console session by design, but the sessionless member surface was mapped and verified: docs/VTC-SURFACE.md), the farm community path needs the portal and is unverified.
 
 
 ## Verification status

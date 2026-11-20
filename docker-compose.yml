@@ -44,7 +44,7 @@ services:
       start_period: 10s
 
   # Optional VTC, behind a compose profile: `docker compose --profile vtc up -d`
-  # (or `WITH_VTC=1 npm run up`). Verified against vtc-service 0.15.0 (docs/VTC.md).
+  # (or `WITH_VTC=1 npm run up`). Verified against vtc-service 0.20.0 (docs/VTC.md).
   # The VTA image does not contain the VTC. Build one with docker/vtc.Dockerfile (see
   # docs/VTC.md) or point VTC_IMAGE at one you were given.
   vtc:

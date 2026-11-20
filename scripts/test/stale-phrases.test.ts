@@ -13,7 +13,7 @@ test("flags the stale TSP and image statements", () => {
 test("passes current wording and clearly historical lines", () => {
   assert.deepEqual(staleHits("the pong comes back, verified with mediator 0.45.0"), []);
   assert.deepEqual(staleHits("The earlier pin meant the pong does not come back."), []);
-  assert.deepEqual(staleHits("Prebuilt images from ghcr.io/mickens-lab by default, local build as the fallback.", true), []);
+  assert.deepEqual(staleHits("Prebuilt images from ghcr.io/bmiller59 by default, local build as the fallback.", true), []);
 });
 
 test("'nothing sends the member credential back' is stale now that the dashboard sends it", () => {

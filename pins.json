@@ -47,11 +47,11 @@
   "images": {
     "available": false,
     "why": "The organisation does not allow public GHCR packages, so participants cannot pull prebuilt images; everyone builds locally (npm run images:build). Set true only when the packages are public (or a registry everyone can pull from is configured).",
-    "registry": "ghcr.io/mickens-lab",
+    "registry": "ghcr.io/bmiller59",
     "platforms": ["linux/amd64", "linux/arm64"],
     "note": "Prebuilt images published by .github/workflows/images.yml to <registry>/<image>:<short ref> (the image names and refs are the vti/messaging pins above). `digest` is the multi-arch index digest (sha256:...) that the workflow reports after a run; null means not published yet (or not recorded), and then the tag is used and `pins:check` says so. Paste the digests in, commit, and `images:pull` / `up` pull by digest. Procedure: docs/IMAGES.md.",
     "verify": {
-      "repo": "Mickens-Lab/openvti-starter",
+      "repo": "bmiller59/openvti-starter",
       "workflow": ".github/workflows/images.yml",
       "issuer": "https://token.actions.githubusercontent.com",
       "note": "Who must have built and signed the published images: this repository's images workflow, via GitHub OIDC. `npm run images:verify` checks exactly this (GitHub attestation and cosign signature). A fork that publishes its own images sets IMAGE_REGISTRY and VERIFY_REPO. UNVERIFIED until the workflow has run: docs/VERIFY.md."
@@ -102,6 +102,6 @@
     "packages/tsp-client/node_modules/@openvtc/vti-tsp-js": "0.4.0"
   },
   "npmNote": {
-    "tsp": "The TSP client (packages/tsp-client) uses @openvtc/vti-tsp-js 0.4.0, which speaks TSP 1.0, for both the end-to-end message to the VTA and the routing layer to the mediator (mediator 0.45.0 reads 1.0; the earlier mediator 0.33.1 needed a second package, vti-tsp-js 0.3.0 for Rev 3, no longer used). @openvtc/pnm-core 0.9.1 brings its own nested vti-tsp-js 0.2.0 (Rev 2), used only for its mediator login and DID resolution. Keys that start with packages/ are lockfile paths. See docs/MESSAGING.md."
+    "tsp": "The TSP client (packages/tsp-client) uses @openvtc/vti-tsp-js 0.4.0, which speaks TSP 1.0, for both the end-to-end message to the VTA and the routing layer to the mediator (mediator 0.48.0 reads 1.0; the earlier mediator 0.33.1 needed a second package, vti-tsp-js 0.3.0 for Rev 3, no longer used). @openvtc/pnm-core 0.9.1 brings its own nested vti-tsp-js 0.2.0 (Rev 2), used only for its mediator login and DID resolution. Keys that start with packages/ are lockfile paths. See docs/MESSAGING.md."
   }
 }
