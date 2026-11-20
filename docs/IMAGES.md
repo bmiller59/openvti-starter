@@ -10,9 +10,38 @@ Part of the [docs index](README.md). Pins and drift checks: [PINS.md](PINS.md).
 > members who have access, or the day packages can be public). They are not the default path and nothing here should be read as saying
 > prebuilt images exist for you.
 
-The VTA, VTC and mediator images are Rust release builds. Plan for **25 to 40 minutes cold for the VTA and for the VTC** on a laptop (12 to 25 minutes
-were measured on a 12-core desktop) and **about 12 minutes for the mediator**, which only `MODE=tunnel` needs. Later builds reuse Docker's layer cache.
-Each image is built once; after that `npm run up` starts in seconds.
+The VTA, VTC and mediator images are Rust release builds. They are heavy once and cheap afterwards: each image is built once, later builds reuse Docker's layer cache, and after that `npm run up` starts in seconds.
+The numbers are in one place, [Build requirements](#build-requirements); the other docs link here.
+
+## Build requirements
+
+This is the single source of truth for what a local build needs. Other documents link here instead of repeating the numbers.
+
+| Resource | What a local build needs | Notes |
+|---|---|---|
+| Disk | **20 GB or more free** on Docker's data root | About 12 GB of BuildKit cache (observed), about 200 MB per image (each pin bump adds one), the VTI clone about 0.9 GB, an exported tar about 0.4 GB. `npm run clean` reclaims it ([below](#reclaiming-disk)). |
+| RAM | **8 GB or more** for Docker is comfortable; **4 GB** is the floor | The build runs in a memory-capped builder (see the cap below). The mediator needs the most headroom. |
+| Swap | Some, on a machine with 16 GB or less | The Rust link step (LTO) was OOM-killed on a 16 GB runner without swap ([workflow notes](../.github/workflows/images.yml)). With swap at least as large as the cap, the builder may use up to twice the cap (cap plus swap). |
+| Cores | No hard minimum | The default cap is a quarter of the cores, at least 2 when the machine has 4 or more. **One core is very slow**: expect well over an hour per Rust image. |
+| Time | **12 to 25 minutes per Rust image** on a 12-core desktop (measured); **about 26 to 29 minutes per build leg** on GitHub-hosted runners with a 12g cap and 16 GB swap (measured: runs 44659883519 and 44663168210); **25 to 40 minutes** on a laptop (an **unmeasured estimate**) | The mediator took about 12 minutes on the 12-core desktop. Later builds reuse the layer cache. |
+| Docker Desktop | The VM limit applies, not the laptop's RAM | Docker Desktop (macOS, Windows) runs Docker in a VM; raise its memory and CPUs in Settings > Resources to at least 8 GB. `doctor` reads the VM's numbers from `docker info`. |
+| arm64 / Apple silicon | Builds natively; images are per CPU architecture | An image built on arm64 runs on arm64 only. Same disk and RAM needs. |
+
+**The build cap, exactly** (`scripts/lib/build-limits.ts`). The builds run on a resource-limited buildx builder. Default memory cap: **half of the Docker engine's RAM, rounded down to whole GB, never below 6g and never above 12g** (8 GB engine: 6g; 16 GB: 8g; 24 GB or more: 12g). Default CPUs: a quarter of the cores, **at least 2 when there are 4 or more cores**, at least 1. When the host has swap at least as large as the cap, memory-swap is twice the cap; otherwise it equals the cap (no swap). Override per run with `--memory`, `--cpus` or `--no-limits`, or with `BUILD_MEMORY` / `BUILD_CPUS` / `BUILD_LIMITS=0` in the environment or `.env`; an explicit value always wins over the defaults. The builder's name encodes the limits (and `-sw` for swap), so a change of defaults starts a fresh builder with a cold cache; `npm run clean` removes the old one.
+
+**Checks, exactly.**
+
+- `images:build` **refuses** (override: `--force`) when free disk on Docker's data root is under **10 GB**, or the Docker engine's memory is under **4 GB**; the message lists the fallbacks below. It **warns** when free disk is under **20 GB** (and suggests `npm run clean`), when the cap is under **8g with no swap** for the VTA or VTC, and when the build is limited to **1 CPU**. It also warns when available memory (`MemAvailable`, Linux) is under 4 GB for the VTA and VTC, or under 8 GB for the mediator.
+- `npm run doctor` shows the same numbers, only when an image has to be built (not when the images exist, and not with `RUNTIME=binary` or `MODE=farm`): disk under 20 GB warns and under 10 GB fails; Docker memory under 8 GB warns and under 4 GB fails; host RAM under 8 GB warns, and no swap on 16 GB or less warns; a single-core cap warns. On macOS and Windows it makes no claim about the host's RAM (only Linux exposes `/proc/meminfo`) and uses `docker info`; the disk line reads "not measured" when Docker's data root is inside a VM or on a remote engine.
+
+**If the machine is too small.** In order of preference:
+
+1. **Import images built on a stronger machine** of the same CPU architecture: `npm run images:import -- buildathon-images.tar` ([Sharing images you built](#sharing-images-you-built)).
+2. **`RUNTIME=binary` with `MODE=local`**: run the VTA and VTC as host binaries you already have, no Docker build ([BINARIES.md](BINARIES.md)).
+3. **`MODE=farm`**: use a hosted VTA, nothing runs locally ([FARM.md](FARM.md)).
+4. **Prebuilt images**, once they are published and `images.available` is `true` ([PINS.md](PINS.md#where-the-images-come-from)). Not available today.
+
+**GitHub-hosted runners.** `images.yml` and `pins-gate.yml` run on `ubuntu-24.04` (and `ubuntu-24.04-arm`). Per GitHub's documentation, a standard runner in a **public** repository has 4 vCPU, 16 GB RAM and 14 GB SSD; in a **private** repository it has 2 vCPU and 8 GB. These workflows assume the repository is public. Disk is freed and 16 GB of swap is added before building.
 
 ## What a participant does
 
@@ -26,9 +55,9 @@ npm run up
 `npm run setup` is `images:build needed`: it builds only the missing images for the chosen mode (`-- --tunnel`, `-- --no-vtc`), one after the
 other, prints the estimate first, warns if memory is low, and reports how long each took. It is safe to stop and run again. The VTA and VTC are
 built from a checkout of the upstream VTI repository next to this one (`git clone ... ../verifiable-trust-infrastructure`, or add `-- --clone`
-and the script does it); the mediator needs no checkout but about 8 GB of memory. Details and times: [PINS.md](PINS.md#where-the-images-come-from).
+and the script does it); the mediator needs no checkout but about 8 GB of memory. Requirements, times and what to do on a small machine: [Build requirements](#build-requirements).
 
-Local builds run on a resource-limited buildx builder so they cannot starve or crash the machine: 6 GB memory with no swap, a quarter of the CPU cores (cargo is pinned to that many cores, so its parallel jobs fit in the memory cap), low CPU priority (`nice` on the docker client alone would not reach the daemon that compiles). Change it per run with `npm run setup -- --memory 8g --cpus 4` (`--no-limits` builds unlimited), or once for all runs by putting `BUILD_MEMORY=8g` and `BUILD_CPUS=4` in `.env` (the environment works too; a flag wins over both). Needs `docker buildx`.
+Local builds run on a resource-limited buildx builder so they cannot starve or crash the machine (cap, swap and CPU defaults: [Build requirements](#build-requirements); cargo is pinned to that many cores, so its parallel jobs fit in the memory cap; low CPU priority, because `nice` on the docker client alone would not reach the daemon that compiles). Change it per run with `npm run setup -- --memory 8g --cpus 4` (`--no-limits` builds unlimited), or once for all runs by putting `BUILD_MEMORY=8g` and `BUILD_CPUS=4` in `.env` (the environment works too; a flag wins over both). `--force` builds despite the small-machine refusal. Needs `docker buildx`.
 
 To get images without building them yourself, a colleague with the same CPU architecture can send you theirs: see
 [Sharing images you built](#sharing-images-you-built).
@@ -90,7 +119,7 @@ npm run clean -- stack              # what `npm run reset` does (deletes keys): 
 npm run clean -- checkout --include-checkout   # deletes the VTI clone; you type its directory name; refused if it has local work
 ```
 
-**The cache is the expensive one to lose.** After the `cache` scope removes a builder or its cache (`--prune-current`, `--remove-current`), the next `images:build` is cold: expect about **25-40 minutes per image**. By default the builder your next build would use is kept (if your current settings name a builder that does not exist yet, the most recently used one counts as current) and only the others go. `images:build` prints "N superseded images, X MB reclaimable" when old images exist.
+**The cache is the expensive one to lose.** After the `cache` scope removes a builder or its cache (`--prune-current`, `--remove-current`), the next `images:build` is cold: expect the cold times in [Build requirements](#build-requirements) (12 to 40 minutes per image). By default the builder your next build would use is kept (if your current settings name a builder that does not exist yet, the most recently used one counts as current) and only the others go. `images:build` prints "N superseded images, X MB reclaimable" when old images exist.
 
 Volumes of other checkouts (`<other-dir>_vta-data` and the like) are listed, never removed; the output gives the `docker volume rm` command to run by hand once you have checked nothing uses them. Without a terminal (CI, a pipe) nothing is asked: `--apply` then needs `--yes`, and the checkout is never deleted.
 
@@ -126,7 +155,7 @@ per image `ready | pullable | missing` with a fix command, and pulls nothing.
 
 ### Checking the images
 
-Pulling is not trusting. `npm run images:verify` checks a pulled image against `pins.json` and the workflow's signature and attestations, and `npm run images:pull -- --by-digest` pulls only by the pinned digest. How, and what that does and does not prove: [VERIFY.md](VERIFY.md). The workflow attaches an SBOM, a build provenance attestation and a keyless cosign signature (jobs `attest` and `sign`); these have **never run** and are unverified until the first real run.
+Pulling is not trusting. `npm run images:verify` checks a pulled image against `pins.json` and the workflow's signature and attestations, and `npm run images:pull -- --by-digest` pulls only by the pinned digest. How, and what that does and does not prove: [VERIFY.md](VERIFY.md). The workflow attaches an SBOM, a build provenance attestation and a keyless cosign signature (jobs `attest` and `sign`); a real run on 2026-10-30 (mediator, pushed to the old organisation registry) had both succeed, and VTA and VTC dry runs passed on 2026-11-20, but `images:verify` against that output and a run against the current registry are still unverified.
 
 ## What an organiser does: publishing (only when packages can be public, or for members)
 
@@ -171,7 +200,7 @@ open-ACL by design and the VTA stores a plaintext seed ([MODES.md](MODES.md), [S
 |---|---|
 | Push fails with 403 or "denied" at the first push | Package creation by members is off in the org (step 1), or an org policy caps the token's permissions (step 2). |
 | `permission_denied: read_package` when pushing a package that already exists | The package was pushed by hand, so the repository's workflow token has no access to it. Either delete that package and let the workflow create it, or open the package settings, "Manage Actions access", and add this repository with the Write role. Seen on the first real run. |
-| `cannot allocate memory` or "the runner has received a shutdown signal" during a Rust build | The runner ran out of memory. The build job adds 16 GB of swap before building; if it still happens, build fewer images per run (`images=vta`, then `vtc`, then `mediator`). |
+| `cannot allocate memory` or "the runner has received a shutdown signal" during a Rust build | The runner ran out of memory. The build job adds 16 GB of swap before building and caps the build at 12g (a 16 GB runner without swap was OOM-killed in the Rust link step); if it still happens, build fewer images per run (`images=vta`, then `vtc`, then `mediator`). |
 | arm64 jobs wait for ever | The `ubuntu-24.04-arm` runner is not available to the organisation. See the QEMU fallback in the workflow comments (hours, not minutes), or publish amd64 only. |
 | A build leg is cancelled at its timeout | The runner was slower than the estimate. Raise `timeout` in the plan step, and record the real time in this file. |
 | `fetch ... origin <sha>` fails in the VTA or VTC leg | The pinned commit is not reachable from the upstream repository (force-pushed or deleted). Re-pin ([PINS.md](PINS.md)). |
@@ -194,6 +223,6 @@ Verified here (no network, no registry):
 - `npm run images:pull` against an unreachable registry fails with the friendly message and the local build named; `npm run up` with
   local images starts a working VTA and `npm run hello` passes.
 
-**Not verified:** that the workflow runs on GitHub at all (including the `attest` and `sign` jobs, `anchore/sbom-action`, `actions/attest-*` and `cosign` against GHCR, and that `gh attestation verify` / `cosign verify` accept the result with the identity `images:verify` expects); that the actions' pinned versions behave as written; that the arm64 images
-build, start and work; build times on the runners; that the org permits package creation; that a participant can pull anonymously; the
+**Not verified:** a run against the current organisation registry (a real run on 2026-10-30 pushed the mediator to the old one with `attest` and `sign` succeeding, and VTA and VTC dry runs passed on 2026-11-20); that the output of those jobs (`anchore/sbom-action`, `actions/attest-*` and `cosign` against GHCR) passes verification, and that `gh attestation verify` / `cosign verify` accept the result with the identity `images:verify` expects); that the actions' pinned versions behave as written; that the arm64 images
+build, start and work; build times of the mediator and arm64 legs on the runners (VTA and VTC legs measured at about 26 to 29 minutes); that the org permits package creation; that a participant can pull anonymously; the
 digest flow end to end; `actionlint` was not available, so only the YAML parse and a shell syntax check stood in for it.

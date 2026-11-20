@@ -38,7 +38,7 @@ In the dashboard the membership card's "Credential delivery" row says which of t
 # Prebuilt images are not yet available (docs/IMAGES.md): build locally, once. `npm run setup -- --tunnel` does all three:
 npm run images:build vta          # once; tsp is now in the feature list, see below
 npm run images:build vtc          # once
-npm run images:build mediator     # once, heavy: about 12 minutes cold and plenty of RAM
+npm run images:build mediator     # once, heavy: about 12 minutes cold on a 12-core desktop and about 8 GB of RAM ([Build requirements](IMAGES.md#build-requirements))
 npm run up -- --tunnel            # tunnels -> mediator -> VTA -> VTC -> probe
 npm run tunnel:probe              # re-run the checks at any time
 npm run down          # stop tunnels, delete the volumes and the tunnel keys in .env
@@ -115,8 +115,8 @@ _Verified live:_ with `MEDIATOR_CORS_ALLOW_ORIGIN=http://localhost:3000` the med
 - **No uptime guarantee.** Cloudflare quick tunnels are for testing: no SLA, they can be rate limited, and they are not for production.
 - **Heavy first build.** The mediator is built from source. A cold build took about 12 minutes on a 12-core machine, building from a
   fresh clone of the pinned commit; the image is about 170 MB; the build's own footprint stayed within about 1.5 GB above idle **[verified,
-  one machine]**. Upstream estimates 20+ minutes and 8 GB of RAM, and `npm run images:build mediator` warns when less than that is
-  available. Running it (mediator 10 MB, redis 5 MB, VTA 16 MB, VTC 27 MB, each `cloudflared` about 33 MB resident) is light.
+  one machine]**. Upstream estimates 20+ minutes and 8 GB of RAM, and `npm run images:build mediator` warns when less than 8 GB is
+  available (the VTA and VTC builds warn below 4 GB; requirements in [IMAGES.md](IMAGES.md#build-requirements)). Running it (mediator 10 MB, redis 5 MB, VTA 16 MB, VTC 27 MB, each `cloudflared` about 33 MB resident) is light.
 - **Messaging: a TSP round trip is verified, DIDComm is not.** (What this kit can and cannot build on it: [MESSAGING.md](MESSAGING.md).) Verified: the mediator answers through its public URL, the VTA and
   VTC connect to it, the VTA's DID document lists `TSPTransport`, `DIDCommMessaging` and `VTARest`, `messaging/ping/0.2` reports `tsp`, `didcomm`, `rest`, the VTC advertises both transports as serviceable,
   a signed TSP ping sent with `npm run tsp:ping` (and from the browser page) gets a pong from the VTA through the mediator, and after a join and an approval the VTC's two `credential-exchange/issue/0.1`
@@ -191,7 +191,7 @@ VTA build features. Two changes to the images you already know:
   but this kit sets both.) `npm run pins:check` flags an unlabelled VTA image and confirms the label matches the pinned list **[verified: an image built by `npm run images:build vta` carries the `org.buildathon.vta-features` label, `pins:check` reports "features match", and `npm run up -- --tunnel` passed every probe check with it]**.
 - **The mediator image** is built from `docker/mediator.Dockerfile`, locally: `npm run images:build mediator` (or `npm run setup -- --tunnel`, which builds whatever tunnel mode is missing). Prebuilt images are not yet available
   ([IMAGES.md](IMAGES.md)), so there is no way around the heavy build except importing an image a colleague built (`npm run images:import`). It is for
-  `MODE=tunnel` only; `images:build all` does not build it. About 12 minutes cold on a 12-core machine and about 8 GB of memory advised.
+  `MODE=tunnel` only; `images:build all` does not build it. About 12 minutes cold on a 12-core desktop and about 8 GB of memory advised ([Build requirements](IMAGES.md#build-requirements)).
 
 `cloudflared` is a host binary (quick tunnels need no account) and is not pinned by this repo; 2024.6.1 was validated.
 

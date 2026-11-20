@@ -45,18 +45,19 @@ single demo or a phone experiment, and take it down afterwards.
 ### Two weeks before
 
 - [ ] **FIRST: plan the images. Prebuilt images are not available** (the organisation does not allow public GHCR packages, so nobody can pull them), and a Rust release build per laptop is what makes local setup slow:
-      plan for 25 to 40 minutes cold for the VTA and again for the VTC on a laptop (about 12 minutes for the mediator, `MODE=tunnel` only). A realistic plan, in order of preference:
+      plan for a cold Rust build per image (VTA, VTC and, for `MODE=tunnel` only, the mediator); disk, RAM, cores and times are in [Build requirements](IMAGES.md#build-requirements) (20 GB or more free disk, 8 GB RAM comfortable, 12 to 25 minutes per image on a 12-core desktop, an unmeasured 25 to 40 on a laptop). A realistic plan, in order of preference:
       1. **Build once on a fast machine, share the result.** On an organiser's machine: `npm ci && npm run setup` (add `-- --tunnel` for the mediator), then
          `npm run images:export -- buildathon-images.tar` (about 400 MB for the VTA and VTC). Put the tar on USB sticks or a local file share; each participant runs `npm ci`,
          `npm run images:import -- buildathon-images.tar`, `npm run up`. Do the full round trip on a second machine before the event (**the single-image and scratch-image round trips are verified, a full
          three-image import and `up` on another machine is not**). The tar is unsigned: hand it out yourself and say so ([VERIFY.md](VERIFY.md)).
          It must match the participants' CPU: build a second tar on an arm64 machine (Apple silicon) if some bring those; an amd64 tar does not run natively there.
-      2. **Participants build in advance.** Send `npm ci && npm run setup` a week ahead ("start it before bed; about 1 hour, needs about 10 GB disk and 8 GB RAM free"). Do not have a room build at once over venue Wi-Fi: each build downloads crates and base images.
-      3. **Build at the event** only for a few people, as the last resort. `npm run doctor` tells each person the exact command and time.
+      2. **Participants build in advance.** Send `npm ci && npm run setup` a week ahead ("start it before bed; about 1 hour; needs 20 GB or more free disk and 8 GB RAM, see [Build requirements](IMAGES.md#build-requirements)"). Do not have a room build at once over venue Wi-Fi: each build downloads crates and base images.
+      3. **Low-resource machines** (under 20 GB free disk, under 8 GB RAM, one or two cores): do not build there. Hand them a tar from option 1, or have them run the VTA and VTC as host binaries (`RUNTIME=binary` with `MODE=local`, [BINARIES.md](BINARIES.md)), or use `MODE=farm` ([FARM.md](FARM.md)). `npm run doctor` and `npm run images:build` say so when a machine is too small.
+      4. **Build at the event** only for a few people, as the last resort. `npm run doctor` tells each person the exact command and time.
 - [ ] **Test the plan on a clean laptop with no images:** `npm ci`, `npm run doctor` (it should list the images to build or import), import or build, `npm run pins:check`, `npm run up`, `npm run hello`.
-      Build from the pinned refs, not from whatever is checked out: `npm run images:build all` uses VTA `vta-service-v0.72.0`, VTC `vtc-service-v0.15.0` ([VTC.md](VTC.md) for times; tags
+      Build from the pinned refs, not from whatever is checked out: `npm run images:build all` uses VTA `vta-service-v0.72.0`, VTC `vtc-service-v0.20.0` ([VTC.md](VTC.md) for times; tags
       `<image>:<short-sha>` and `:local`). `npm run pins:check` should show no drift on the image refs. Before advancing a pin, re-verify the local VTA + VTC path and the farm note ([PINS.md](PINS.md)).
-- [ ] **Later, not now: publishing prebuilt images.** If the organisation ever allows public packages, the workflow in [IMAGES.md](IMAGES.md) (never run, unverified) publishes signed multi-arch images; then set
+- [ ] **Later, not now: publishing prebuilt images.** If the organisation ever allows public packages, the workflow in [IMAGES.md](IMAGES.md) (a real run on 2026-10-30 built and pushed the mediator, with attest and sign succeeding, to the old organisation registry; dry runs of the VTA and VTC passed on 2026-11-20; none of it is verified for this organisation's registry) publishes signed multi-arch images; then set
       `images.available` to `true` in `pins.json`, record the digests, and verify with [VERIFY.md](VERIFY.md). Until then none of that is on the critical path.
 - [ ] Locally built images match the builder's CPU only; include an arm64 machine in the clean-laptop check if participants have them.
 - [ ] Test the full checkpoint from a clean clone on Linux, macOS and Windows (WSL2).
@@ -120,7 +121,7 @@ mints each team's admin key and prints what to paste.
 - [ ] Hosted VTC admin (approving join requests) is a passkey flow in the VTC console,
       not scriptable; assign a mentor as community admin.
 
-### Local VTC (optional; verified locally, cold build ~23 min)
+### Local VTC (optional; verified locally, cold build ~23 min on a 12-core desktop)
 
 - [ ] A VTC needs its own image: `npm run images:build vtc` (`docker/vtc.Dockerfile`, see
       [VTC.md](VTC.md)). Build it once from the pinned ref, as for the VTA, only if a track needs a community and Farm communities are

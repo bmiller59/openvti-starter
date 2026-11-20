@@ -136,7 +136,7 @@ nice -n 10 docker build -f docker/vtc.Dockerfile -t vtc-buildathon:local /path/t
 WITH_VTC=1 npm run up
 ```
 
-Build facts (verified): cold build 1401 s (~23 min) on 12 cores for 0.13.0; 0.15.0 took about 8 min with warm caches; image about 197 MB, `vtc 0.15.0`.
+Build facts (verified): cold build 1401 s (~23 min) on 12 cores for 0.13.0 (other requirements and times: [IMAGES.md](IMAGES.md#build-requirements)); 0.15.0 took about 8 min with warm caches; image about 197 MB, `vtc 0.15.0`.
 Features must be `setup,website,tsp`. Without `tsp` the crate does not compile
 (upstream: `registry/messaging.rs` calls the `tsp`-gated `outbound::seal_trust_task_tsp`
 unconditionally; E0425). `keyring` and the `admin-ui` SPA are left out (no secret-service
@@ -157,7 +157,7 @@ with role `admin`, scope `vtc`, a 1 h expiry and `ext["org.openvtc.handoff"] = t
 Re-run on 2026-10-29 after aligning the pins with the Farm: vta-service 0.65.0 (tag `vta-service-v0.65.0`, `fc157f76`)
 and vtc-service 0.15.0 (tag `vtc-service-v0.15.0`, `93d36996`), each image built from its own ref by
 `npm run images:build all`, DIDComm off, `docker compose --profile vtc`. Build times on 12 cores, niced, with
-warm Docker layer caches (VTA about 11 min, VTC about 8 min; the earlier cold VTC build took 23 min):
+warm Docker layer caches (VTA about 11 min, VTC about 8 min; the earlier cold VTC build took 23 min; cold, a 12-core desktop takes 12 to 25 min per image):
 
 - Both images run together. `vtc setup` phase 1/2, the `did:key` scrape, and the hand-off `acl/grant` against
   vta-service 0.65.0 all work; the VTC's `tsp` feature is still required (see the build facts above).

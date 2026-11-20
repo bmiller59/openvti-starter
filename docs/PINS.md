@@ -33,10 +33,10 @@ development; tagged `:local` only). Images carry the label `org.buildathon.vti-r
 
 **Current decision: build locally; prebuilt images are not yet available.** The organisation does not allow public GHCR packages, so participants cannot pull images and everyone builds their own
 (`npm run setup`). `pins.json` `images.available` (`false`, with a one-line `why`) is the single switch: while it is `false`, `IMAGES=auto` means local and nothing is pulled. The publish workflow
-(`.github/workflows/images.yml`, never run), the signing and verification tooling and the digest fields stay for later, for organisation members (`IMAGES=registry`, after `docker login`) or if
+(`.github/workflows/images.yml`; a real run on 2026-10-30 built and pushed the mediator to the old organisation registry with attest and sign succeeding, and dry runs of the VTA and VTC passed on 2026-11-20), the signing and verification tooling and the digest fields stay for later, for organisation members (`IMAGES=registry`, after `docker login`) or if
 packages can ever be public ([IMAGES.md](IMAGES.md)). This is the one place that says so; the other docs link here, so if the status changes, change this section, the `images.available` switch and the `Prerequisites` bullet in the README.
 
-The local-build cold path, exactly (Linux, 12 cores, Docker; the times below were measured on a 12-core desktop, so plan 25 to 40 minutes per Rust image on a laptop):
+The local-build cold path, exactly (Linux, 12 cores, Docker; the times below were measured on a 12-core desktop; requirements and laptop estimates are in [IMAGES.md](IMAGES.md#build-requirements)):
 
 ```sh
 # 1. The upstream repository, next to this one (the URL is `vti.repo` in pins.json). `images:build` asks before cloning in a terminal,
@@ -44,12 +44,12 @@ The local-build cold path, exactly (Linux, 12 cores, Docker; the times below wer
 git clone https://github.com/OpenVTC/verifiable-trust-infrastructure ../verifiable-trust-infrastructure
 git -C ../verifiable-trust-infrastructure fetch --tags origin     # the pinned refs must be present
 # 2. Build what you need, in one command: `npm run setup` (local: VTA + VTC; `-- --tunnel` adds the mediator). Or one at a time (each image is exported from its own pinned ref; niced; the first build is the slow one)
-npm run images:build vta        # about 12 min cold (Rust); local mode needs this
+npm run images:build vta        # 12 to 25 min cold on a 12-core desktop (Rust); local mode needs this
 npm run images:build vtc        # about 8 min with warm caches, about 23 min cold; only for WITH_VTC=1 and the community
 npm run images:build mediator   # about 12 min cold, tunnel mode only; also needs `cloudflared`
 ```
 
-Budget several GB of free RAM (the mediator build warns below 8 GB) and about 10 GB of disk for the Rust build layers. If the checkout is somewhere else, set `VTI_PATH`.
+Budget disk, RAM and cores as in [Build requirements](IMAGES.md#build-requirements) (20 GB or more free disk; the build warns below 4 GB of available memory for the VTA and VTC and below 8 GB for the mediator, and refuses below 10 GB free disk or 4 GB engine memory unless `--force`). If the checkout is somewhere else, set `VTI_PATH`.
 The mediator comes from its own repository (`messaging.mediator.repo` in pins.json), which the Dockerfile fetches itself, so no checkout is needed for it.
 `npm run doctor` lists which images and which VTI checkout are missing, with the exact build command and its time first. Images you built can be copied to another machine of the same CPU architecture
 with `npm run images:export` / `images:import` (`docker save` / `docker load`; [IMAGES.md](IMAGES.md#sharing-images-you-built), [EVENT.md](EVENT.md)).
@@ -121,7 +121,7 @@ Then, by hand:
 
 ## Reclaiming disk after a bump
 
-Each pin bump builds new images and leaves the old ones (about 180-200 MB each) beside them, plus the BuildKit cache (about 12 GB observed). After `pins:update` and `pins:verify` (which prints a "N superseded images" hint when there are any), run `npm run clean` to see them and `npm run clean -- images --apply` to remove the superseded images; the pinned tag and `:local` stay. Clearing the build cache makes the next build cold (about 25-40 minutes per image), so it is not part of a routine clean. All scopes and sizes: [IMAGES.md](IMAGES.md#reclaiming-disk).
+Each pin bump builds new images and leaves the old ones (about 180-200 MB each) beside them, plus the BuildKit cache (about 12 GB observed). After `pins:update` and `pins:verify` (which prints a "N superseded images" hint when there are any), run `npm run clean` to see them and `npm run clean -- images --apply` to remove the superseded images; the pinned tag and `:local` stay. Clearing the build cache makes the next build cold ([times](IMAGES.md#build-requirements)), so it is not part of a routine clean. All scopes and sizes: [IMAGES.md](IMAGES.md#reclaiming-disk).
 
 ## The gate in CI
 
@@ -129,7 +129,7 @@ Each pin bump builds new images and leaves the old ones (about 180-200 MB each) 
 
 - **Required-check safe.** There is no path filter on the trigger (a required check skipped by a filter never reports and blocks the merge). A cheap `changes` job decides, and the final `pins-gate` job always runs: it passes when the live gate passed, or when nothing the gate covers changed; it fails when the gate failed, was cancelled, or was skipped although needed. Mark **`pins-gate`** as the required check (below).
 - **Where the images come from** (`pins:verify --images auto`, printed in the job summary): when `pins.json` `images.available` is `true`, the VTA and VTC are pulled **by the digests in `pins.json`** and checked with `npm run images:verify` (GitHub attestation and cosign keyless signature) before anything starts, and the stack runs with `IMAGES=registry`; a missing digest or a failed verification fails the gate (no fallback to a tag or a build). While `available` is `false` (today) the gate builds from the pinned upstream refs (`images:build`, amd64 only) from a checkout of the VTI repository at the pinned commit. Cold build, no layer cache: expect a long run (the job timeout is 170 minutes; the build step alone is capped at 90).
-- **Runner limits.** A GitHub-hosted `ubuntu-24.04` runner has 4 vCPU, 16 GB RAM and limited free disk, below the "several GB of RAM, about 10 GB of disk" a comfortable build wants. The job removes preinstalled toolchains to free disk, adds 16 GB of swap on `/mnt` (as `images.yml` does) and raises `images:build`'s cap to `BUILD_MEMORY=12g`, `BUILD_CPUS=4`. Whether that is enough for the Rust LTO links is unproven until a real run.
+- **Runner limits.** A GitHub-hosted `ubuntu-24.04` runner in a public repository has 4 vCPU, 16 GB RAM and 14 GB SSD (per GitHub's documentation; a private repository gets 2 vCPU and 8 GB), below the 20 GB of free disk a comfortable build wants ([Build requirements](IMAGES.md#build-requirements)). The job removes preinstalled toolchains to free disk, adds 16 GB of swap on `/mnt` (as `images.yml` does) and raises `images:build`'s cap to `BUILD_MEMORY=12g`, `BUILD_CPUS=4`. The Rust LTO links are shown to fit this setup (12g cap, 16 GB swap) for the VTA and VTC by two `images.yml` dry runs (44659883519 and 44663168210, about 26 to 29 minutes per leg); this workflow itself has not run.
 - **After a run.** Failure uploads `pins-gate-logs` (gate output, `docker ps`, container logs); `npm run down` always runs. The PINS_LOG line the gate prints is in the job log: paste it into the PR (it names the image source used).
 - **One-time manual step (needs repo admin; not done by any workflow).** After the first green run, require the check on `main`. This replaces the protection settings, so read the current ones first (`gh api repos/bmiller59/openvti-starter/branches/main/protection`); if none exist, the simplest form is:
 

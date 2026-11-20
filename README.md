@@ -17,16 +17,18 @@ It is for developers who want to see a signed Trust Task round trip working in m
 - Node 20+ and npm 10+, Docker with Compose v2
 - The VTA image (plus the VTC image for the community, and the mediator image for tunnel mode). **Build locally; prebuilt images are not yet available**
   (the organisation does not allow public packages, so there is nothing to pull). `npm run setup` builds what your mode needs: it needs a checkout of the upstream VTI repository
-  next to this one (`npm run setup -- --clone` makes it) and a cold Rust build of **25 to 40 minutes for the VTA and again for the VTC** on a laptop (the mediator, `MODE=tunnel` only,
-  is about 12 minutes). Do this once, ahead of time, with a few GB of free memory; later runs reuse the images. A colleague with the same CPU architecture can hand you theirs
-  (`npm run images:import`; [docs/IMAGES.md](docs/IMAGES.md#sharing-images-you-built)). Exact steps: [docs/PINS.md](docs/PINS.md#where-the-images-come-from). To check what you run:
+  next to this one (`npm run setup -- --clone` makes it) and a cold Rust build per image (VTA, VTC and, for `MODE=tunnel` only, the mediator). Do this once, ahead of time; later runs reuse the images.
+  Disk, RAM, cores and times (20 GB or more free disk, 8 GB RAM comfortable; 12 to 25 min per image on a 12-core desktop, 25 to 40 min estimated on a laptop): [Build requirements](docs/IMAGES.md#build-requirements). `npm run doctor` checks them.
+  **Low on resources?** Import images a colleague built on a stronger machine of the same CPU architecture (`npm run images:import`; [docs/IMAGES.md](docs/IMAGES.md#sharing-images-you-built)),
+  run the VTA and VTC as host binaries you already have (`RUNTIME=binary` with `MODE=local`, [docs/BINARIES.md](docs/BINARIES.md)), use a hosted VTA (`MODE=farm`, [docs/FARM.md](docs/FARM.md)), or use prebuilt images once they are published.
+  Exact steps: [docs/PINS.md](docs/PINS.md#where-the-images-come-from). To check what you run:
   [docs/VERIFY.md](docs/VERIFY.md). Without Docker, see the Farm mode in [docs/MODES.md](docs/MODES.md).
 
 ## Quick start
 
 ```sh
 npm ci
-npm run setup                # once: builds the missing images (the slow part, 25 to 40 min per Rust image cold; see Prerequisites)
+npm run setup                # once: builds the missing images (the slow part, minutes per Rust image cold; see Prerequisites)
 npm run up                   # keys, VTA + VTC, a "my-app" context and a credential in .env (WITH_VTC=0: no community)
 npm run hello                # first signed call
 npm run vtc:hello            # read the community's join manifest
