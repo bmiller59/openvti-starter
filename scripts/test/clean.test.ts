@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   applyPlan, buildPlan, formatBytes, formatPlan, parseCleanArgs, parseSize, planCache, planCheckout, planForeign, planImages, planSource, planStack, planTars,
-  safeToRemove, supersededHint, type CleanArgs, type CleanDeps, type CleanDocker, type CleanFs, type DockerImage, type FsStat, type Git, type Volume,
+  safeToRemove, supersededHint, type CleanArgs, type CleanDeps, type CleanDocker, type ContainerRef, type CleanFs, type DockerImage, type FsStat, type Git, type Volume,
 } from "../lib/clean.js";
 import { realCleanFs } from "../lib/clean-real.js";
 
@@ -14,14 +14,15 @@ const pinned = [
   { name: "vta", keep: ["26d0da81", "0.72.0-26d0da81"] }, { name: "vtc", keep: ["26d0da81", "0.20.0-26d0da81"] },
   { name: "mediator", keep: ["e6e2c636", "0.48.0-e6e2c636"] },
 ];
+const KIT = { isKit: () => true };
 const img = (repo: string, tag: string, id: string, bytes = 190e6): DockerImage => ({ repo, tag, id, bytes });
 const NOW = Date.parse("2026-11-19T12:00:00Z");
 const ago = (min: number) => NOW - min * 60_000;
 
-function fakeDocker(o: Partial<{ images: DockerImage[]; running: string[]; builders: { name: string; nodes: string[] }[]; volumes: Volume[]; failRm: string }> = {}) {
+function fakeDocker(o: Partial<{ images: DockerImage[]; containers: ContainerRef[]; kit: boolean; builders: { name: string; nodes: string[] }[]; volumes: Volume[]; failRm: string }> = {}) {
   const calls: string[] = [];
   const d: CleanDocker = {
-    images: () => o.images ?? [], runningRefs: () => o.running ?? [], builders: () => o.builders ?? [], volumes: () => o.volumes ?? [],
+    images: () => o.images ?? [], containers: () => o.containers ?? [], isKit: () => o.kit ?? true, builders: () => o.builders ?? [], volumes: () => o.volumes ?? [],
     imageRm: (r) => { calls.push(`image rm ${r}`); return o.failRm === r ? { ok: false, message: "conflict" } : { ok: true }; },
     builderRm: (n) => { calls.push(`buildx rm ${n}`); return { ok: true }; },
     builderPrune: (n) => { calls.push(`buildx prune ${n}`); return { ok: true }; },
@@ -96,7 +97,7 @@ const imgs = [
 ];
 
 test("images: only <pinned name>:<8 hex> tags that are not the pinned ref are removed; :local, the pinned tag and others stay", () => {
-  const p = planImages(imgs, pinned, []);
+  const p = planImages(imgs, pinned, [], KIT);
   assert.deepEqual(p.items.map((i) => i.action), [{ kind: "image-rm", ref: "vta:fc157f76" }, { kind: "image-rm", ref: "vtc:93d36996" }]);
   assert.equal(p.items.reduce((s, i) => s + i.bytes, 0), 377e6);
 });
@@ -107,7 +108,7 @@ test("images: both tag forms of the current pin are kept, both forms of an old p
     img("vta", "fc157f76", "B2"), img("vta", "0.65.0-fc157f76", "B2"),
     img("vta", "0.71.0-26d0da81", "G7", 50e6),
   ];
-  const p = planImages(all, pinned, []);
+  const p = planImages(all, pinned, [], KIT);
   assert.deepEqual(p.items.map((i) => (i.action as { ref: string }).ref).sort(), ["vta:0.65.0-fc157f76", "vta:0.71.0-26d0da81", "vta:fc157f76"]);
   assert.equal(p.items.reduce((s, i) => s + i.bytes, 0), 190e6 + 50e6);
   assert.ok(p.info.some((l) => l.text === "kept vta:0.72.0-26d0da81"));
@@ -115,40 +116,76 @@ test("images: both tag forms of the current pin are kept, both forms of an old p
 });
 
 test("images: a version tag that is not <version>-<8 hex> is never a candidate", () => {
-  const p = planImages([img("vta", "0.65.0-rc1", "Z1"), img("vta", "latest", "Z2")], pinned, []);
+  const p = planImages([img("vta", "0.65.0-rc1", "Z1"), img("vta", "latest", "Z2")], pinned, [], KIT);
   assert.equal(p.items.length, 0);
 });
 
 test("images: a registry-prefixed copy of a pinned image name is recognised, a lookalike name is not", () => {
-  const p = planImages([img("ghcr.io/org/vta", "fc157f76", "X1"), img("evilvta-buildathon", "fc157f76", "X2")], pinned, []);
+  const p = planImages([img("ghcr.io/org/vta", "fc157f76", "X1"), img("evilvta-buildathon", "fc157f76", "X2")], pinned, [], KIT);
   assert.deepEqual(p.items.map((i) => i.action), [{ kind: "image-rm", ref: "ghcr.io/org/vta:fc157f76" }]);
 });
 
-test("images: an image a running container uses is refused, by name or by (short or full) id", () => {
-  const byName = planImages(imgs, pinned, ["vta:fc157f76"]);
+test("images: an image ANY container uses (running or stopped, any project) is refused with its name and project", () => {
+  const ctr = (name: string, project: string, imageId: string, imageRef = ""): ContainerRef => ({ name, project, imageId, imageRef });
+  const byName = planImages(imgs, pinned, [ctr("bamvtilive-vta-1", "bamvtilive", "sha256:zzz", "vta:fc157f76")], KIT);
   assert.equal(byName.items.length, 1);
-  assert.match(byName.refused[0].text, /running container/);
+  assert.match(byName.refused[0].text, /vta:fc157f76 is in use by bamvtilive-vta-1 \(bamvtilive\)/);
   const full = "sha256:" + "c3".padEnd(12, "0") + "ffff";
-  const byId = planImages([img("vtc", "93d36996", "c30000000000")], pinned, [full]);
+  const byId = planImages([img("vtc", "93d36996", "c30000000000")], pinned, [ctr("stopped-one", "", full)], KIT);
   assert.equal(byId.items.length, 0);
-  assert.equal(byId.refused.length, 1);
+  assert.match(byId.refused[0].text, /in use by stopped-one \(no compose project\)/);
+});
+
+test("images: only images with the kit labels are candidates; a foreign vta:<8 hex> is kept and said so", () => {
+  const p = planImages([img("vta", "fc157f76", "B2"), img("vta", "11111111", "K1")], pinned, [], { isKit: (id) => id === "K1" });
+  assert.deepEqual(p.items.map((i) => i.action), [{ kind: "image-rm", ref: "vta:11111111" }]);
+  assert.ok(p.info.some((l) => /kept vta:fc157f76 \(no org\.buildathon\.\* labels/.test(l.text)));
+});
+
+const legacy = [img("vta-buildathon", "26d0da81", "a1a1a1a1a1a1"), img("vta-buildathon", "local", "a1a1a1a1a1a1"), img("ghcr.io/bmiller59/vtc-buildathon", "0.20.0-26d0da81", "b2b2b2b2b2b2"), img("vta", "26d0da81", "A1")];
+test("images: legacy *-buildathon names are listed on a default run and removed only when the images scope is explicit", () => {
+  const listed = planImages(legacy, pinned, [], KIT);
+  assert.equal(listed.items.length, 0);
+  assert.equal(listed.info.filter((l) => l.text.startsWith("legacy name ")).length, 3);
+  const removed = planImages(legacy, pinned, [], { isKit: () => true, removeLegacy: true });
+  assert.deepEqual(removed.items.map((i) => (i.action as { ref: string }).ref).sort(), ["ghcr.io/bmiller59/vtc-buildathon:0.20.0-26d0da81", "vta-buildathon:26d0da81", "vta-buildathon:local"]);
+  assert.ok(removed.items.every((i) => i.label.startsWith("legacy name image ")));
+  assert.ok(!removed.items.some((i) => /^image vta:/.test(i.label)), "current-pin tags stay");
+});
+
+test("images: legacy names in use, or without kit labels, are never removed", () => {
+  const used = planImages(legacy, pinned, [{ name: "other-vta-1", project: "other", imageId: "sha256:a1a1a1a1a1a1" + "0".repeat(10), imageRef: "vta-buildathon:local" }], { isKit: () => true, removeLegacy: true });
+  assert.deepEqual(used.items.map((i) => (i.action as { ref: string }).ref), ["ghcr.io/bmiller59/vtc-buildathon:0.20.0-26d0da81"]);
+  assert.equal(used.refused.length, 2);
+  assert.match(used.refused[0].text, /legacy name vta-buildathon:\S+ is in use by other-vta-1 \(other\)/);
+  const foreign = planImages(legacy, pinned, [], { isKit: () => false, removeLegacy: true });
+  assert.equal(foreign.items.length, 0);
+});
+
+test("images: the whole plan marks legacy removal explicit-only and removes by untagging a single tag, never forced", () => {
+  const { d, calls } = fakeDocker({ images: legacy, containers: [] });
+  const dflt = buildPlan({ ...baseArgs, scopes: ["images"], explicit: false }, deps({ docker: d }));
+  assert.equal(dflt.items.length, 0);
+  const named = buildPlan({ ...baseArgs, scopes: ["images"], explicit: true }, deps({ docker: d }));
+  assert.equal(named.items.length, 3);
+  return applyPlan(named.items, deps({ docker: d })).then(() => assert.deepEqual(calls.sort(), ["image rm ghcr.io/bmiller59/vtc-buildathon:0.20.0-26d0da81", "image rm vta-buildathon:26d0da81", "image rm vta-buildathon:local"]));
 });
 
 test("images: a superseded tag on the same image as a kept tag only untags (frees 0)", () => {
-  const p = planImages([img("vta", "26d0da81", "S1"), img("vta", "11111111", "S1")], pinned, []);
+  const p = planImages([img("vta", "26d0da81", "S1"), img("vta", "11111111", "S1")], pinned, [], KIT);
   assert.equal(p.items.length, 1);
   assert.equal(p.items[0].bytes, 0);
   assert.match(p.items[0].label, /only untags/);
 });
 
 test("images: two superseded tags on one image count its size once", () => {
-  const p = planImages([img("vta", "11111111", "T1", 100e6), img("vta", "22222222", "T1", 100e6)], pinned, []);
+  const p = planImages([img("vta", "11111111", "T1", 100e6), img("vta", "22222222", "T1", 100e6)], pinned, [], KIT);
   assert.equal(p.items.reduce((s, i) => s + i.bytes, 0), 100e6);
 });
 
 test("the post-build hint counts superseded images, and is silent when there are none", () => {
-  assert.equal(supersededHint(imgs, pinned, []), "2 superseded images, 377 MB reclaimable: npm run clean -- images");
-  assert.equal(supersededHint([img("vta", "26d0da81", "A1")], pinned, []), undefined);
+  assert.equal(supersededHint(imgs, pinned, [], () => true), "2 superseded images, 377 MB reclaimable: npm run clean -- images");
+  assert.equal(supersededHint([img("vta", "26d0da81", "A1")], pinned, [], () => true), undefined);
 });
 
 // --- cache --------------------------------------------------------------------------------------------------------

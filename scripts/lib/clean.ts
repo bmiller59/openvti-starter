@@ -4,7 +4,7 @@
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { Pins } from "../pins.js";
 import { DEFAULT_TAR } from "./share.js";
-import { canonicalTags, isRefTag } from "./image-tags.js";
+import { canonicalTags, isRefTag, legacyName } from "./image-tags.js";
 
 export type Scope = "images" | "cache" | "source" | "tars" | "stack" | "checkout";
 export const ALL_SCOPES: readonly Scope[] = ["images", "cache", "source", "tars", "stack", "checkout"];
@@ -92,13 +92,16 @@ export function formatBytes(n: number): string {
 // --- injected runners -----------------------------------------------------------------------------------------
 
 export interface DockerImage { repo: string; tag: string; id: string; bytes: number }
+export interface ContainerRef { name: string; /** compose project, "" when none */ project: string; /** full image id (sha256:...) */ imageId: string; /** the reference it was created with (Config.Image) */ imageRef: string }
 export interface Builder { name: string; nodes: string[]; /** ISO time of the last build on it, when known */ lastActivity?: string }
 export interface Volume { name: string; bytes: number }
 export type Result = { ok: true } | { ok: false; message: string };
 export interface CleanDocker {
   images(): DockerImage[];
-  /** Names (`repo:tag`) and IDs of the images running containers use. */
-  runningRefs(): string[];
+  /** EVERY container, running or stopped, of any compose project or none: nothing in use by any of them is ever removed. */
+  containers(): ContainerRef[];
+  /** Does the image carry the kit's org.buildathon.* labels (built or published by this kit)? Unknown counts as no. */
+  isKit(imageId: string): boolean;
   builders(): Builder[];
   volumes(): Volume[];
   imageRm(ref: string): Result;
@@ -179,25 +182,49 @@ const sameId = (a: string, b: string): boolean => {
   return /^[0-9a-f]{12,}$/.test(x) && /^[0-9a-f]{12,}$/.test(y) && (x.startsWith(y) || y.startsWith(x));
 };
 
+export interface ImagePlanOpts {
+  isKit: (imageId: string) => boolean;
+  /** Offer the old `<name>-buildathon` images for removal (an explicit `images` scope); otherwise they are only listed. */
+  removeLegacy?: boolean;
+}
+const usedBy = (cs: ContainerRef[], i: DockerImage): ContainerRef[] => cs.filter((c) => c.imageRef === `${i.repo}:${i.tag}` || sameId(c.imageId, i.id));
+export const describeContainer = (c: ContainerRef): string => `${c.name} (${c.project || "no compose project"})`;
+
 /**
- * Superseded = `<pinned image name>:<8 hex>` or `:<version>-<8 hex>` whose tag is not one of the current pin's two tags. `:local`, the pinned tag, other tags and other
- * images are never candidates. An image that a kept tag (or any other tag) still points to is only untagged, so it frees nothing.
+ * Candidates, only ever for images that carry the kit's labels (the short names `vta`, `vtc`, `mediator` may belong to another
+ * project; those are left alone and said so):
+ *  - superseded: `<pinned image name>:<8 hex>` or `:<version>-<8 hex>` whose tag is not one of the current pin's two tags;
+ *  - legacy name: any tag of `<pinned name>-buildathon` (the names before the 2026-11 rename), offered for removal only with
+ *    `removeLegacy`, otherwise listed.
+ * `:local`, the pinned tags, other tags and other images are never candidates. A candidate that ANY container (running or
+ * stopped, any compose project) uses is refused with the container's name. An image that a kept tag (or any other tag) still
+ * points to is only untagged, so it frees nothing. Removal is `docker image rm <tag>` (untag), never forced.
  */
-export function planImages(images: DockerImage[], pinned: PinnedImage[], running: string[]): Plan {
+export function planImages(images: DockerImage[], pinned: PinnedImage[], containers: ContainerRef[], o: ImagePlanOpts): Plan {
   const plan = emptyPlan();
-  const runningSet = new Set(running);
-  const isCandidate = (i: DockerImage) => { const p = pinnedFor(i.repo, pinned); return p !== undefined && isRefTag(i.tag) && !p.keep.includes(i.tag); };
-  const candidates = images.filter(isCandidate);
-  for (const i of images.filter((x) => pinnedFor(x.repo, pinned) && !isCandidate(x))) plan.info.push({ scope: "images", text: `kept ${i.repo}:${i.tag}` });
-  for (const i of candidates) {
+  const legacyOf = (repo: string) => pinned.find((p) => repo === legacyName(p.name) || repo.endsWith("/" + legacyName(p.name)));
+  const kit = new Map<string, boolean>();
+  const isKit = (i: DockerImage) => { if (!kit.has(i.id)) kit.set(i.id, o.isKit(i.id)); return kit.get(i.id)!; };
+  const isSuperseded = (i: DockerImage) => { const p = pinnedFor(i.repo, pinned); return p !== undefined && isRefTag(i.tag) && !p.keep.includes(i.tag) && isKit(i); };
+  const isLegacy = (i: DockerImage) => legacyOf(i.repo) !== undefined && isKit(i);
+  const isCandidate = (i: DockerImage) => isSuperseded(i) || (isLegacy(i) && o.removeLegacy === true);
+  for (const i of images) {
+    const named = pinnedFor(i.repo, pinned) !== undefined || legacyOf(i.repo) !== undefined;
+    if (!named) continue;
+    if (!isKit(i)) plan.info.push({ scope: "images", text: `kept ${i.repo}:${i.tag} (no org.buildathon.* labels: not built by this kit, never touched)` });
+    else if (isLegacy(i) && !o.removeLegacy) plan.info.push({ scope: "images", text: `legacy name ${i.repo}:${i.tag} (old image name; kept, and still works; npm run clean -- images --apply removes it when no container uses it)` });
+    else if (!isCandidate(i)) plan.info.push({ scope: "images", text: `kept ${i.repo}:${i.tag}` });
+  }
+  for (const i of images.filter(isCandidate)) {
     const ref = `${i.repo}:${i.tag}`;
-    const inUse = runningSet.has(ref) || running.some((r) => sameId(r, i.id));
-    if (inUse) { plan.refused.push({ scope: "images", text: `${ref} is used by a running container (stop it first: npm run down)` }); continue; }
+    const users = usedBy(containers, i);
+    const why = isLegacy(i) ? "legacy name " : "";
+    if (users.length) { plan.refused.push({ scope: "images", text: `${why}${ref} is in use by ${users.map(describeContainer).join(", ")}` }); continue; }
     const sharers = images.filter((x) => x.id === i.id);
     const freed = sharers.every(isCandidate);
-    plan.items.push({ scope: "images", label: freed ? `image ${ref}` : `image ${ref} (only untags: the same image is also ${sharers.filter((x) => x !== i && !isCandidate(x)).map((x) => `${x.repo}:${x.tag}`).join(", ") || "tagged otherwise"})`, bytes: freed ? i.bytes : 0, action: { kind: "image-rm", ref } });
+    plan.items.push({ scope: "images", label: `${isLegacy(i) ? "legacy name " : ""}image ${ref}${freed ? "" : ` (only untags: the same image is also ${sharers.filter((x) => x !== i && !isCandidate(x)).map((x) => `${x.repo}:${x.tag}`).join(", ") || "tagged otherwise"})`}`, bytes: freed ? i.bytes : 0, action: { kind: "image-rm", ref } });
   }
-  // One image carrying several superseded tags counts once.
+  // One image carrying several removable tags counts once.
   const counted = new Set<string>();
   for (const it of plan.items) {
     const img = images.find((x) => `${x.repo}:${x.tag}` === (it.action as { ref: string }).ref)!;
@@ -207,8 +234,8 @@ export function planImages(images: DockerImage[], pinned: PinnedImage[], running
 }
 
 /** The hint printed after a build: `undefined` when nothing is superseded. */
-export function supersededHint(images: DockerImage[], pinned: PinnedImage[], running: string[]): string | undefined {
-  const plan = planImages(images, pinned, running);
+export function supersededHint(images: DockerImage[], pinned: PinnedImage[], containers: ContainerRef[], isKit: (id: string) => boolean): string | undefined {
+  const plan = planImages(images, pinned, containers, { isKit });
   if (plan.items.length === 0) return undefined;
   const bytes = plan.items.reduce((s, i) => s + i.bytes, 0);
   return `${plan.items.length} superseded image${plan.items.length === 1 ? "" : "s"}, ${formatBytes(bytes)} reclaimable: npm run clean -- images`;
@@ -350,7 +377,7 @@ export function buildPlan(args: CleanArgs, d: CleanDeps): Plan {
   const wants = (s: Scope) => args.scopes.includes(s);
   let volumes: Volume[] = [];
   const dockerPart = (f: () => void, what: string) => { try { f(); } catch (e) { plan.warnings.push(`could not read ${what} (is Docker running?): ${(e as Error).message}`); } };
-  if (wants("images")) dockerPart(() => merge(plan, planImages(d.docker.images(), d.pinned, d.docker.runningRefs())), "images");
+  if (wants("images")) dockerPart(() => merge(plan, planImages(d.docker.images(), d.pinned, d.docker.containers(), { isKit: (id) => d.docker.isKit(id), removeLegacy: args.explicit })), "images");
   if (wants("cache") || wants("stack")) dockerPart(() => { volumes = d.docker.volumes(); }, "volumes");
   if (wants("cache")) dockerPart(() => merge(plan, planCache(d.docker.builders(), volumes, d.currentBuilder, args)), "buildx builders");
   if (wants("source")) merge(plan, planSource(d.tmpRoots, d.fs, d.now(), args.olderThanMin));

@@ -5,7 +5,11 @@
 //   npm run clean -- images            only some scopes: `--only images,cache` or bare words
 // Scopes:
 //   images    vta/vtc/mediator:<8 hex> tags that are not the ref pinned in pins.json, one tag at a time (docker image rm).
-//             Keeps :local and the pinned tag; refuses an image a running container uses. ~180-200 MB each.
+//             Keeps :local and the pinned tag. Only images carrying the kit's org.buildathon.* labels are ever considered. An image that
+//             ANY container uses (running or stopped, any compose project) is refused: "in use by <container> (<compose project>)".
+//             Untags only (docker image rm <tag>, never -f). ~180-200 MB each.
+//             Legacy names (<name>-buildathon, from before the rename): listed by any run, removed only when `images` is named
+//             explicitly, and only when unused. Nothing else ever removes them.
 //   cache     the resource-limited buildx builders (buildathon2-*) and their cache volumes: the non-current ones are removed.
 //             The current builder is kept (--prune-current empties its cache, --remove-current deletes it). Observed ~12 GB.
 //             WARNING: the next build is cold, about 25-40 minutes per image.

@@ -98,7 +98,7 @@ trustworthy as whoever made it ([VERIFY.md](VERIFY.md)). By hand the same thing 
 
 ## Reclaiming disk
 
-Local builds leave things behind. `npm run clean` lists them and, only with `--apply`, removes them. It is a dry run by default, prints every item with its size and a total per scope and overall, and never touches a running container's image, `:local`, the pinned tag, or anything it did not create.
+Local builds leave things behind. `npm run clean` lists them and, only with `--apply`, removes them. It is a dry run by default, prints every item with its size and a total per scope and overall, and never touches an image that **any container uses** (running or stopped, of any project on this machine; shown as `in use by <container> (<compose project>)`), `:local`, the pinned tag, or anything it did not create (images without the kit's `org.buildathon.*` labels are never considered, so another project's `vta` stays). Superseded tags are removed by untagging one tag (`docker image rm <tag>`, never `-f`). Old-name images (`*-buildathon`, see [Renamed images](#renamed-images)) are listed on every run as "legacy name" and removed only by `npm run clean -- images --apply`, again only when unused.
 
 | What | Typical size | Scope |
 |---|---|---|

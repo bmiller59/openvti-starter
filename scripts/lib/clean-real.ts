@@ -5,6 +5,7 @@ import { lstatSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parseSize, supersededHint, pinnedImages, type CleanDocker, type CleanFs, type Git, type Result } from "./clean.js";
 import { pins } from "../pins.js";
+import { isKitImage, realQuery } from "./image-guard.js";
 
 const docker = (args: string[], timeout = 60_000) => spawnSync("docker", args, { encoding: "utf8", timeout, maxBuffer: 64 * 1024 * 1024 });
 const out = (args: string[], timeout?: number): string => {
@@ -20,11 +21,15 @@ export const realCleanDocker: CleanDocker = {
     const j = JSON.parse(l) as { Repository: string; Tag: string; ID: string; Size: string };
     return { repo: j.Repository, tag: j.Tag, id: j.ID, bytes: parseSize(j.Size) };
   }),
-  runningRefs: () => {
-    const ids = lines(out(["ps", "-q"]));
+  containers: () => {
+    const ids = lines(out(["ps", "-a", "-q", "--no-trunc"]));
     if (!ids.length) return [];
-    return lines(out(["inspect", "--format", "{{.Image}}\n{{.Config.Image}}", ...ids]));
+    return lines(out(["inspect", "--format", '{{.Name}}\t{{.Image}}\t{{.Config.Image}}\t{{index .Config.Labels "com.docker.compose.project"}}', ...ids])).map((l) => {
+      const [name = "", imageId = "", imageRef = "", project = ""] = l.split("\t");
+      return { name: name.replace(/^\//, ""), imageId, imageRef, project: project === "<no value>" ? "" : project };
+    });
   },
+  isKit: (id) => isKitImage(realQuery, id),
   builders: () => lines(out(["buildx", "ls", "--format", "json"])).map((l) => {
     const j = JSON.parse(l) as { Name: string; Nodes?: { Name: string }[]; LastActivity?: string };
     return { name: j.Name, nodes: (j.Nodes ?? []).map((n) => n.Name), lastActivity: j.LastActivity };
@@ -64,5 +69,5 @@ export const realGit: Git = (repo, args) => {
 
 /** For the hint after a build: undefined when Docker cannot be asked or nothing is superseded. Never throws. */
 export function supersededHintNow(): string | undefined {
-  try { return supersededHint(realCleanDocker.images(), pinnedImages(pins()), realCleanDocker.runningRefs()); } catch { return undefined; }
+  try { return supersededHint(realCleanDocker.images(), pinnedImages(pins()), realCleanDocker.containers(), (id) => realCleanDocker.isKit(id)); } catch { return undefined; }
 }
