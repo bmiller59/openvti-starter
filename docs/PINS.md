@@ -15,7 +15,7 @@ npm run images:verify [-- vta|vtc|mediator|all]   # is it the pinned, signed ima
 npm run pins:check [-- --strict]     # report drift; changes nothing
 ```
 
-**Pull first; build locally as the fallback.** `pins.json` `images.available` is `false` for now (the 0.83/0.31 pin and the renamed images are not published yet; the kit and the gate build locally). Once it is `true` again, the images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
+**Pull first; build locally as the fallback.** `pins.json` `images.available` is `true`: the 0.83/0.31 images are published under the new names (vta, vtc, mediator; published and attested 2026-11-20, still not live-gated). The images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
 The tags come from the pin: `<ref8>` (the first 8 characters of the pinned ref) and `<version>-<ref8>`; a bump changes both ([IMAGES.md](IMAGES.md#image-names-and-tags)). Building locally (the commands below) remains supported, for an unsupported CPU architecture, no network, or a pin that has not been published yet.
 
 `images:build` exports each pinned ref from a VTI checkout (`VTI_PATH`, default
@@ -57,7 +57,7 @@ One ref: the 0.83 release commit (`3ee07a12`) is both `vta-service-v0.83.0` and 
 
 | Image | Tag | Ref | Why |
 |---|---|---|---|
-| `vta` | `vta-service-v0.83.0` | `3ee07a12` | Advanced from 0.72.0 on 2026-11-20 by `pins:update`. **UNVERIFIED: the gate has not run, and the clients are known to need changes (see below). Not what the Farm ran when last observed (0.65.0).** |
+| `vta` | `vta-service-v0.83.0` | `3ee07a12` | Advanced from 0.72.0 on 2026-11-20 by `pins:update`. **UNVERIFIED: the image is published and attested (digest in `pins.json`), but the gate has not run, and the clients are known to need changes (see below). Not what the Farm ran when last observed (0.65.0).** |
 | `vtc` | `vtc-service-v0.31.0` | `3ee07a12` | The VTC cut from the same release commit as the VTA (was 0.20.0). The VTC Trust Task surface the kit uses is unchanged in this range (additive only). |
 
 For `MODE=tunnel` ([MODES.md](MODES.md)) there are more pins, in `pins.json` under `messaging`:

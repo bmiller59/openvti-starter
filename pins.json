@@ -20,7 +20,7 @@
       "service": "vtc-service"
     },
     "pinnedOn": "2026-11-20",
-    "why": "Advanced to vta-service-v0.83.0 and vtc-service-v0.31.0 (commit 3ee07a12) by npm run pins:update. UNVERIFIED: the gate (docs/PINS.md) has not been run yet.",
+    "why": "Advanced to vta-service-v0.83.0 and vtc-service-v0.31.0 (commit 3ee07a12) by npm run pins:update. UNVERIFIED: the gate (docs/PINS.md) has not been run yet; the images are published and attested.",
     "note": "Both pins are release commit 3ee07a12. Not yet re-verified end to end: see PINS_LOG.md and the expected-breakage list in docs/PINS.md."
   },
   "messaging": {
@@ -45,8 +45,8 @@
     "note": "Advance only deliberately via docs/PINS.md. The mediator is open-ACL in this kit by design (docs/MODES.md)."
   },
   "images": {
-    "available": false,
-    "why": "The new pin (VTA 0.83.0 / VTC 0.31.0, commit 3ee07a12) and the renamed images (vta, vtc, mediator) are not published yet: images.yml has not run for them, so there are no digests to record. The kit builds locally (npm run images:build) until the images are published, made public, their digests recorded here and npm run images:verify passes; then set this true (docs/IMAGES.md).",
+    "available": true,
+    "why": "Published and attested on 2026-11-20 under the new names (vta, vtc, mediator): the 0.83/0.31 pin (commit 3ee07a12) from images.yml runs 44840698581, 44844039325 and 44847338146, public on GHCR, digests recorded here and images:verify VERIFIED all three. Set false to make IMAGES=auto build locally and never pull (docs/IMAGES.md).",
     "registry": "ghcr.io/bmiller59",
     "platforms": ["linux/amd64", "linux/arm64"],
     "note": "Prebuilt images published by .github/workflows/images.yml to <registry>/<image>:<short ref> (the image names and refs are the vti/messaging pins above). `digest` is the multi-arch index digest (sha256:...) that the workflow reports after a run; null means not published yet (or not recorded), and then the tag is used and `pins:check` says so. Paste the digests in, commit, and `images:pull` / `up` pull by digest. Procedure: docs/IMAGES.md.",
@@ -56,9 +56,9 @@
       "issuer": "https://token.actions.githubusercontent.com",
       "note": "Who must have built and signed the published images: this repository's images workflow, via GitHub OIDC. `npm run images:verify` checks exactly this (GitHub attestation and cosign signature). A fork that publishes its own images sets IMAGE_REGISTRY and VERIFY_REPO. The workflow's first real runs were on 2026-11-20 (PINS_LOG.md); what images:verify reported is recorded in docs/VERIFY.md."
     },
-    "vta": { "digest": null },
-    "vtc": { "digest": null },
-    "mediator": { "digest": null }
+    "vta": { "digest": "sha256:d86f5f074f97477d2c980f2db4af464a876a51f1dd1135d8fbd5011611f2242f" },
+    "vtc": { "digest": "sha256:65db9357d15755062d62e29cee377c5ac4f4d24b36d97f971f8c7ee42190f3f5" },
+    "mediator": { "digest": "sha256:69ef5649a5c2d7190505aca82fa72a29a70df0325e1b2c171abdda01baacf8bc" }
   },
   "farm": {
     "observedOn": "2026-10-29T18:38Z",

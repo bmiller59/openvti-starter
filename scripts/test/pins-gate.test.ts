@@ -159,9 +159,9 @@ test("pins-gate workflow: the final job passes only on gate success, or skip whe
   assert.equal(decide("failure", "", "skipped"), 1);
 });
 
-test("the committed pins.json (new pin awaiting publish): the gate builds, and an explicit pull fails closed", () => {
+test("the committed pins.json (0.83/0.31 published, not yet gated): digests are recorded, so nothing blocks a pull by digest", () => {
   const p = real();
-  assert.equal(p.images.available, false);
-  assert.equal(resolveImagesSource(p, "auto").source, "build");
-  assert.equal(pullBlockers(p).length, 2); // vta and vtc digests are null: nothing movable is ever pulled
+  assert.equal(p.images.available, true);
+  assert.equal(resolveImagesSource(p, "auto").source, "pull");
+  assert.equal(pullBlockers(p).length, 0); // vta and vtc digests are recorded
 });

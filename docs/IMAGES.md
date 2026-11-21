@@ -171,7 +171,7 @@ Migration and deprecation path:
 - New names are introduced first; **nothing removes the old ones automatically.** Other projects may still reference `vta-buildathon:...` locally or `ghcr.io/bmiller59/vta-buildathon` in the registry, so the old names keep working until the owner decides.
 - The old packages `ghcr.io/bmiller59/*-buildathon` stay in the registry until the owner deletes them by hand (GitHub, Packages, Package settings, Delete). The kit never deletes a package.
 - The old local names (`*-buildathon:<tag>`, only images carrying the kit labels) are listed by `npm run clean -- images` as "legacy name" candidates, removed only with that explicit scope plus `--apply`, one tag at a time, and only when no container (running or stopped, any project) uses them. A plain `npm run clean` only lists them.
-- The new packages are created by the next `images.yml` publish; a new GHCR package starts private, so set it public once (organiser step, see "What an organiser does"). Until `pins.json` `images.available` is true the kit builds locally.
+- The new packages were created by the 2026-11-20 publish of the 0.83/0.31 pin and are public (checked anonymously). A new GHCR package starts private, so a fork sets it public once (organiser step, see "What an organiser does"). Setting `pins.json` `images.available` to false makes the kit build locally.
 
 ### Checks
 

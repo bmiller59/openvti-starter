@@ -268,18 +268,20 @@ test("pullTarget: a recorded digest is always pulled by digest; --by-digest refu
 
 // --- images.available (pins.json): the single switch --------------------------------------------------------
 
-test("pins.json: images.available is a boolean (false while the 0.83/0.31 pin awaits publishing under the new names) with a one-line why", () => {
+test("pins.json: images.available is a boolean (true: the 0.83/0.31 pin is published under the new names) with a one-line why", () => {
   const i = pins().images;
   assert.equal(typeof i.available, "boolean");
-  assert.equal(i.available, false, "set true only after publish, public packages, recorded digests and images:verify");
+  assert.equal(i.available, true, "true only after publish, public packages, recorded digests and images:verify");
   assert.ok(i.why.length > 20 && !i.why.includes("\n"));
-  assert.equal(imagesAvailable(pins()), false);
-  for (const k of ["vta", "vtc", "mediator"] as const) assert.equal(i[k].digest, null, `${k}: digests come from the next publish, never invented`);
+  assert.equal(imagesAvailable(pins()), true);
+  for (const k of ["vta", "vtc", "mediator"] as const) assert.match(i[k].digest ?? "", /^sha256:[0-9a-f]{64}$/, `${k}: the digest recorded from the publish`);
   assert.deepEqual(availabilityProblems(pins()), []);
 });
 
 test("availabilityProblems: available=true needs the VTA and VTC digests; available=false with null digests is the designed state", () => {
   const p = pins();
+  p.images.vta.digest = null;
+  p.images.vtc.digest = null;
   p.images.available = true;
   assert.equal(availabilityProblems(p).length, 2);
   p.images.vta.digest = "sha256:" + "a".repeat(64);
