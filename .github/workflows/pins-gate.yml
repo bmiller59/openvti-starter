@@ -161,6 +161,14 @@ jobs:
           done
           echo "VTI_PATH=$src" >> "$GITHUB_ENV"
 
+      # The runner's /usr/bin/chromium is a snap stub that cannot open a debugging port on a throwaway profile; the preinstalled Google Chrome can.
+      - name: Pick a browser for e2e
+        run: |
+          for c in google-chrome-stable google-chrome; do
+            if p=$(command -v "$c"); then echo "CHROME=$p" >> "$GITHUB_ENV"; "$p" --version; exit 0; fi
+          done
+          echo "::error::no google-chrome on this runner; e2e needs a real Chrome"; exit 1
+
       # BUILD_MEMORY / BUILD_CPUS raise images:build's default cap (half the engine RAM, 6g to 12g, and a quarter of the cores) to what the runner has; the swap above
       # backs it. Both are ignored in pull mode.
       - name: Run the gate (pins:verify)

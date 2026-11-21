@@ -36,12 +36,14 @@ export class Browser {
       "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
       "--remote-debugging-port=0", `--user-data-dir=${profile}`, `--window-size=${size.width},${size.height}`, "about:blank",
     ], { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    b.proc.stderr?.on("data", (d) => { stderr = (stderr + String(d)).slice(-1500); });
     const portFile = join(profile, "DevToolsActivePort");
     for (let i = 0; i < 100 && !b.port; i++) {
       await sleep(100);
       try { b.port = Number(readFileSync(portFile, "utf8").split("\n")[0]); } catch { /* not yet */ }
     }
-    if (!b.port) { b.proc.kill(); throw new Error("the browser did not open its debugging port"); }
+    if (!b.port) { b.proc.kill(); throw new Error(`the browser did not open its debugging port (${chrome})${stderr ? `: ${stderr.trim()}` : ""}`); }
     let targets: any[] = [];
     for (let i = 0; i < 50; i++) {
       try { targets = await (await fetch(`http://127.0.0.1:${b.port}/json/list`)).json(); if (targets.some((t) => t.type === "page")) break; } catch { /* retry */ }
