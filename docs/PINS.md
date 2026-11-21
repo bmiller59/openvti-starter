@@ -15,7 +15,7 @@ npm run images:verify [-- vta|vtc|mediator|all]   # is it the pinned, signed ima
 npm run pins:check [-- --strict]     # report drift; changes nothing
 ```
 
-**Pull first; build locally as the fallback.** `pins.json` `images.available` is `true`: the 0.83/0.31 images are published under the new names (vta, vtc, mediator; published and attested 2026-11-20, still not live-gated). The images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
+**Pull first; build locally as the fallback.** `pins.json` `images.available` is `true`: the 0.83/0.31 images are published under the new names (vta, vtc, mediator; published and attested 2026-11-20; live-gated in MODE=local the same day). The images are published at `ghcr.io/bmiller59` (public, signed and attested by this repository's workflow, digests recorded in `pins.json`), so `npm run up` pulls the pinned image by digest when no image is present and `npm run images:pull` fetches them ahead of time ([IMAGES.md](IMAGES.md)).
 The tags come from the pin: `<ref8>` (the first 8 characters of the pinned ref) and `<version>-<ref8>`; a bump changes both ([IMAGES.md](IMAGES.md#image-names-and-tags)). Building locally (the commands below) remains supported, for an unsupported CPU architecture, no network, or a pin that has not been published yet.
 
 `images:build` exports each pinned ref from a VTI checkout (`VTI_PATH`, default
@@ -57,7 +57,7 @@ One ref: the 0.83 release commit (`3ee07a12`) is both `vta-service-v0.83.0` and 
 
 | Image | Tag | Ref | Why |
 |---|---|---|---|
-| `vta` | `vta-service-v0.83.0` | `3ee07a12` | Advanced from 0.72.0 on 2026-11-20 by `pins:update`. **UNVERIFIED: the image is published and attested (digest in `pins.json`), but the gate has not run, and the clients are known to need changes (see below). Not what the Farm ran when last observed (0.65.0).** |
+| `vta` | `vta-service-v0.83.0` | `3ee07a12` | Advanced from 0.72.0 on 2026-11-20 by `pins:update`. Verified 2026-11-20: `pins:verify -- --images pull` passed in MODE=local (not MODE=tunnel, not `farm:*`) after the `acl/grant/0.3` client change (see below). Not what the Farm ran when last observed (0.65.0). |
 | `vtc` | `vtc-service-v0.31.0` | `3ee07a12` | The VTC cut from the same release commit as the VTA (was 0.20.0). The VTC Trust Task surface the kit uses is unchanged in this range (additive only). |
 
 For `MODE=tunnel` ([MODES.md](MODES.md)) there are more pins, in `pins.json` under `messaging`:
@@ -74,13 +74,15 @@ Farm participants must pick an image the Farm offers that matches the pin; the l
 
 ## To do: version negotiation in the clients
 
-The clients hard-code Trust Task versions (`vta-client`: `acl/grant/0.2`, `trust-task-discovery/0.3` (moved from 0.1 for the 0.72 pin, so it no longer works against a 0.65 VTA such as the Farm's), `auth/*`;
+The clients hard-code Trust Task versions (`vta-client`: `acl/grant/0.3`, `trust-task-discovery/0.3` (moved from 0.1 for the 0.72 pin, so it no longer works against a 0.65 VTA such as the Farm's), `auth/*`;
 `vtc-client`: manifest 0.4 with a 0.3 fallback, list 0.2 with a 0.1 fallback). They should ask the peer what it serves
 (trust-task discovery, or the OpenAPI document) and pick the highest common version, so one kit works across Farm
 releases (a 0.67 VTA already drops `acl/grant/0.1` and `trust-task-discovery/0.1`) instead of being fixed to one pin.
 Until then, the pins plus the canary's version warning are the guard.
 
 ## Bump to 0.83/0.31: expected breakage
+
+**Outcome (2026-11-20).** Finding 1 (and 2) was a real hard break and is fixed: the clients send `acl/grant/0.3` with `purposes: {scope:"any"}` on every entry; the live gate (MODE=local: provisioning, the `vtc:up` hand-off grant, e2e, test:roles, hello) then passed against VTA 0.83.0 / VTC 0.31.0. Findings 12 (rooms) and 13 (mediator 0.52.0, `messaging/wake`) were NOT exercised: the local stack has no room and no mediator, so they stay unverified until a MODE=tunnel run. The text below is the original static survey.
 
 Static survey only (nothing was run): this repo's hard-coded versions and config against the upstream source at the old and new pin
 (`git archive` of `26d0da81` and `3ee07a12`; dispatch tables in `vta-service/src/trust_tasks/mod.rs`, the `vti-specs-*` locks and bundles,
@@ -89,8 +91,8 @@ in a client that was deliberately not guessed.
 
 | # | Finding | This repo | Upstream | Kind |
 |---|---|---|---|---|
-| 1 | The VTA no longer dispatches `acl/grant/0.2` (nor `acl/list/0.3`, `show`, `update`, `revoke`, `change-role` 0.2); only `acl/grant/0.3`, `list/0.4`, `show|update|revoke|change-role/0.3` | `packages/vta-client/src/client.ts:27` (`aclGrant`), `grantAcl` at :277, `grantHandoff` at :295, the approvals-demo grant at :318; `packages/status-panel/src/parse.ts:99` (doc example only) | `vta-service/src/trust_tasks/mod.rs:2607-2617` (old `:3837` served 0.2); `vti-specs-core/trust-tasks/acl/grant/0.3.bundle.json` | **Hard break, needs live verification.** Every `grantAcl` / `grantHandoff` (provisioning, `vtc:up`) fails with an unsupported-version refusal. In the 0.3 schema `AclEntry` gains a **required** `purposes` field (`{scope:"any"}` or `{scope:"listed", purposes:[...]}`), plus `purposes` error details. The new payload shape, and whether `{scope:"any"}` is the right value, is NOT guessed here: confirm against a live 0.83 VTA, then change `TASK.aclGrant` and the entry, and the fakes in the tests. |
-| 2 | `vtc-up.ts` grants the VTC's setup key with the hand-off marker over the same `acl/grant` | `scripts/vtc-up.ts:45`, `packages/vta-client/src/client.ts:296` | `acl.rs:330` (hand-off rollover rides `acl/grant`, now also behind the central PDP gate) | Same fix as 1; the hand-off `ext["org.openvtc.handoff"]` semantics need a live check |
+| 1 | The VTA no longer dispatches `acl/grant/0.2` (nor `acl/list/0.3`, `show`, `update`, `revoke`, `change-role` 0.2); only `acl/grant/0.3`, `list/0.4`, `show|update|revoke|change-role/0.3` | `packages/vta-client/src/client.ts:27` (`aclGrant`), `grantAcl` at :277, `grantHandoff` at :295, the approvals-demo grant at :318; `packages/status-panel/src/parse.ts:99` (doc example only) | `vta-service/src/trust_tasks/mod.rs:2607-2617` (old `:3837` served 0.2); `vti-specs-core/trust-tasks/acl/grant/0.3.bundle.json` | **Hard break, needs live verification.** Every `grantAcl` / `grantHandoff` (provisioning, `vtc:up`) fails with an unsupported-version refusal. In the 0.3 schema `AclEntry` gains a **required** `purposes` field (`{scope:"any"}` or `{scope:"listed", purposes:[...]}`), plus `purposes` error details. **Fixed 2026-11-20:** `TASK.aclGrant` is 0.3 and every entry carries `purposes: {scope:"any"}` (any purpose except `modelTraining`; confirmed by the live gate), with fakes in `packages/vta-client/test/client.test.ts`. |
+| 2 | `vtc-up.ts` grants the VTC's setup key with the hand-off marker over the same `acl/grant` | `scripts/vtc-up.ts:45`, `packages/vta-client/src/client.ts:296` | `acl.rs:330` (hand-off rollover rides `acl/grant`, now also behind the central PDP gate) | Same fix as 1 (live gate: `vtc:up` hand-off granted and the VTC finished setup); the hand-off `ext["org.openvtc.handoff"]` semantics need a live check |
 | 3 | VTC Dockerfile pinned `rust:1.95`; upstream now builds with a root `rust-toolchain.toml` (`1.100.0`, MSRV still 1.95.0) | `docker/vtc.Dockerfile` (`RUST_VERSION`) | `rust-toolchain.toml`, `Dockerfile:45` | **Fixed here** (`RUST_VERSION=1.100.0`, test in `scripts/test/bump-survey.test.ts`). Without it rustup would fetch 1.100.0 anyway at build time, slowly. |
 | 4 | New default VTA feature `webs` (did:webs, alpha); the kit's `features` list is explicit and does not include it | `pins.json vti.vta.features` | `vta-service/Cargo.toml` `default = [..., "webs"]` | Additive. Left out on purpose (the kit does not use did:webs); every feature in the list still exists. |
 | 5 | The VTA's own `FEATURES` default now reads `setup,rest,didcomm,cli-synthesis,aws-secrets,webvh` and `cli-synthesis` pulls `vta-cli-common`/`dialoguer` | `scripts/images-build.ts:143` | upstream `Dockerfile:80` | Additive, no change. |

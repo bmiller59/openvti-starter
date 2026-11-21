@@ -128,8 +128,25 @@ test("grantHandoff sends an admin entry with the one-time hand-off marker and an
   const e = seen[0].doc.payload.entry;
   assert.equal(seen[0].doc.type, TASK.aclGrant);
   assert.deepEqual([e.role, e.act, e.keys, e.capabilities, e.ext], ["admin", { scope: "contexts", contexts: ["vtc"] }, { scope: "all" }, { scope: "ceiling" }, { "org.openvtc.handoff": true }]);
-  assert.equal(e.scopes, undefined, "acl/grant/0.2 has no `scopes`");
+  assert.equal(e.scopes, undefined, "acl/grant/0.3 has no `scopes`");
   assert.ok(Date.parse(e.expiresAt) > Date.now());
+  assert.deepEqual(e.purposes, { scope: "any" });
+});
+
+test("every acl/grant entry is 0.3: sent at /acl/grant/0.3 with the required `purposes` (any)", async () => {
+  assert.equal(TASK.aclGrant, "https://trusttasks.org/spec/acl/grant/0.3");
+  const seen: Seen[] = [];
+  const c = await VtaClient.connect("http://vta", newIdentity(), fakeVta(() => ({ entry: {} }), seen));
+  await c.grantAcl("did:key:z6Mka", "demo");
+  await c.grantApprover("did:key:z6Mkb");
+  await c.grantHandoff("did:key:z6Mkc", "vtc");
+  assert.equal(seen.length, 3);
+  for (const s of seen) {
+    assert.equal(s.doc.type, "https://trusttasks.org/spec/acl/grant/0.3");
+    const e = s.doc.payload.entry;
+    for (const k of ["subject", "role", "act", "keys", "capabilities", "purposes"]) assert.ok(e[k] !== undefined, `${k} is required by 0.3`);
+    assert.deepEqual(e.purposes, { scope: "any" });
+  }
 });
 
 test("siopIdToken names the signer's verification method as kid: did:key form, and a did:peer:2 #key-2 when the signer says so", () => {

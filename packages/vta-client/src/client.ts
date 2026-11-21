@@ -24,12 +24,15 @@ export const TASK = {
   whoami: `${TT}/auth/whoami/0.1`,
   contextsCreate: `${TT}/vta/contexts/create/1.0`,
   contextsList: `${TT}/vta/contexts/list/1.0`,
-  aclGrant: `${TT}/acl/grant/0.2`,
+  aclGrant: `${TT}/acl/grant/0.3`,
   contextsUpdate: `${TT}/vta/contexts/update/1.0`,
 } as const;
 
-/** acl/*\/0.2 authority scope limited to one context (and its descendants). */
+/** acl/*\/0.3 authority scope limited to one context (and its descendants). */
 const contextScope = (context: string) => ({ scope: "contexts" as const, contexts: [context] });
+
+/** acl/grant/0.3 requires `purposes` on every entry; `any` covers every purpose except `modelTraining`, which `any` never grants. */
+const ANY_PURPOSE = { scope: "any" as const };
 
 export const DEFAULT_URL = "http://localhost:8100";
 
@@ -277,9 +280,9 @@ export class VtaClient {
   async grantAcl(subject: string, context: string, role = "application", label = `${context} app`): Promise<boolean> {
     return this.idempotent(() =>
       this.call(TASK.aclGrant, {
-        // acl/grant/0.2 states every axis explicitly (0.1's `scopes` is gone): act in this context, every key it reaches,
-        // and the role's whole capability ceiling.
-        entry: { subject, role, act: contextScope(context), keys: { scope: "all" }, capabilities: { scope: "ceiling" }, label },
+        // acl/grant/0.3 states every axis explicitly (0.1's `scopes` is gone): act in this context, every key it reaches,
+        // the role's whole capability ceiling, and (new in 0.3, required) any purpose except modelTraining.
+        entry: { subject, role, act: contextScope(context), keys: { scope: "all" }, capabilities: { scope: "ceiling" }, purposes: ANY_PURPOSE, label },
         reason: "buildathon provisioning",
       }),
     );
@@ -301,6 +304,7 @@ export class VtaClient {
           act: contextScope(context),
           keys: { scope: "all" },
           capabilities: { scope: "ceiling" },
+          purposes: ANY_PURPOSE,
           label,
           expiresAt: rfc3339(new Date(Date.now() + expiresInMs)),
           ext: { "org.openvtc.handoff": true },
@@ -315,7 +319,7 @@ export class VtaClient {
    * request, not enough to do anything else. Over messaging an approver needs no entry at all; over REST it needs this.
    */
   async grantApprover(subject: string, label = "approver"): Promise<boolean> {
-    return this.idempotent(() => this.call(TASK.aclGrant, { entry: { subject, role: "monitor", act: { scope: "none" }, keys: { scope: "none" }, capabilities: { scope: "ceiling" }, label }, reason: "approvals demo" }));
+    return this.idempotent(() => this.call(TASK.aclGrant, { entry: { subject, role: "monitor", act: { scope: "none" }, keys: { scope: "none" }, capabilities: { scope: "ceiling" }, purposes: ANY_PURPOSE, label }, reason: "approvals demo" }));
   }
 
   private async idempotent(fn: () => Promise<unknown>): Promise<boolean> {

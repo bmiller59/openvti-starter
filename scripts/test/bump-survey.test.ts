@@ -36,7 +36,6 @@ test("docs/PINS.md records the expected breakage, including the wire-protocol it
   assert.match(d, /0\.52\.0/);
 });
 
-test("the kit's clients still send acl/grant 0.2: a known hard break against 0.83, deliberately not changed without a live VTA", () => {
-  // If this starts failing the client was moved to 0.3: update docs/PINS.md (finding 1) and delete this test.
-  assert.match(read("packages/vta-client/src/client.ts"), /aclGrant: `\$\{TT\}\/acl\/grant\/0\.2`/);
+test("the kit's clients send acl/grant 0.3 (the 0.83 VTA dispatches no other version)", () => {
+  assert.match(read("packages/vta-client/src/client.ts"), /aclGrant: `\$\{TT\}\/acl\/grant\/0\.3`/);
 });

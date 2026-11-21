@@ -20,8 +20,8 @@
       "service": "vtc-service"
     },
     "pinnedOn": "2026-11-20",
-    "why": "Advanced to vta-service-v0.83.0 and vtc-service-v0.31.0 (commit 3ee07a12) by npm run pins:update. UNVERIFIED: the gate (docs/PINS.md) has not been run yet; the images are published and attested.",
-    "note": "Both pins are release commit 3ee07a12. Not yet re-verified end to end: see PINS_LOG.md and the expected-breakage list in docs/PINS.md."
+    "why": "Advanced to vta-service-v0.83.0 and vtc-service-v0.31.0 (commit 3ee07a12) by npm run pins:update. Verified by npm run pins:verify -- --images pull, MODE=local, 2026-11-20 (PINS_LOG.md); the images are published and attested.",
+    "note": "Both pins are release commit 3ee07a12. Gate passed in MODE=local (not MODE=tunnel, not farm:*): see PINS_LOG.md and the bump notes in docs/PINS.md."
   },
   "messaging": {
     "pinnedOn": "2026-10-29",

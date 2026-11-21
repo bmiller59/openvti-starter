@@ -45,7 +45,7 @@ Trust Task background, finding, using, developing and evaluating tasks: [trust-t
 | whoami | `auth/whoami/0.1` | authenticated app |
 | contextsCreate | `vta/contexts/create/1.0` | admin |
 | contextsList | `vta/contexts/list/1.0` | admin |
-| aclGrant | `acl/grant/0.2` | admin |
+| aclGrant | `acl/grant/0.3` | admin |
 
 All are prefixed `https://trusttasks.org/spec/`. The VTA serves about 300 more;
 `npm run hello` shows the count and `vta.discover()` lists them.

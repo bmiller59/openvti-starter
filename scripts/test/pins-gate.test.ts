@@ -159,7 +159,7 @@ test("pins-gate workflow: the final job passes only on gate success, or skip whe
   assert.equal(decide("failure", "", "skipped"), 1);
 });
 
-test("the committed pins.json (0.83/0.31 published, not yet gated): digests are recorded, so nothing blocks a pull by digest", () => {
+test("the committed pins.json (0.83/0.31 published and gated in MODE=local): digests are recorded, so nothing blocks a pull by digest", () => {
   const p = real();
   assert.equal(p.images.available, true);
   assert.equal(resolveImagesSource(p, "auto").source, "pull");
