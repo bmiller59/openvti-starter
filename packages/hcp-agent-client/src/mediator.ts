@@ -12,7 +12,8 @@
 // before anything reads it.
 //
 // The socket itself is a seam (`MediatorLink`): login, the WebSocket and
-// reconnects belong to whatever opens it (for example `@openvtc/pnm-core`).
+// reconnects belong to whatever opens it (`connectMediatorLink` in link.ts
+// logs in and opens it with `@openvtc/pnm-core`).
 // Nothing here waits without a bound: every wait has a timeout, failures back
 // off, and the loop stops on a signal, a deadline, or too many failures in a
 // row.

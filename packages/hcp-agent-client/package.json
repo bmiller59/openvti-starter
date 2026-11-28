@@ -16,6 +16,7 @@
   "dependencies": {
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
+    "@openvtc/pnm-core": "0.9.1",
     "@openvtc/trust-tasks": "0.31.11",
     "@openvtc/trust-tasks-proof": "0.2.5",
     "@openvtc/trust-tasks-tsp": "0.2.1",

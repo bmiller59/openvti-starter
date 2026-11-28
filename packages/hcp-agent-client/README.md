@@ -57,7 +57,9 @@ const ack = await client.receive(sealedNotice);   // send `ack` back to the VTA,
 Through the agent's mediator, a `MediatorCarrier` is the carrier and runs the receive loop:
 
 ```ts
-const mc = new MediatorCarrier({ identity, mediator, provider, link }); // link: your socket to the mediator
+// Log in to the mediator and open the WebSocket (@openvtc/pnm-core, as @starter/tsp-client does):
+const { link, mediator, close } = await connectMediatorLink({ identity, mediatorDid, providerDid: vtaDid });
+const mc = new MediatorCarrier({ identity, mediator, provider, link });
 const client = new HcpAgentClient({ identity, provider, carrier: mc.carrier, resolveDid });
 await mc.relate();                                                        // TSP relationship with the VTA
 const loop = mc.run({ onInbound: (m) => client.receive(m), signal });    // notices in, acknowledgements back
@@ -85,7 +87,9 @@ npm run example -w @starter/hcp-agent-client
 | `grants()`, `grant(id)`, `processedNotices()`, `forgetGrant(id)`, `purgeExpired()` | State, without tokens. |
 | `pairingFor(vid, threadId, vtaDid)`, `pairingNumber(threadId, vid)` | The QR text (`{"vid","threadId","vtaDid"}`) and the four-digit number. |
 | `resolveProvider(vtaDid, resolveDid)`, `providerFromDidDocument(doc)` | The VTA's keys and `TSPTransport` route from its DID document, wherever the VTA is hosted (its own service or one a community hosts). The resolver is yours to pass. |
-| `new MediatorCarrier({ identity, mediator, provider, link })` | Carries the client's messages through the agent's mediator. `carrier` wraps each Direct TSP message in a Routed message to the mediator with the provider as the remaining hop, and waits at most `replyTimeoutMs` (default 30 s) for the reply on the request's thread. `relate()` sends the TSP relationship invite and waits for the accept. `wrap` / `unwrap`: inbound frames are the provider's Direct message, or that message in a Nested (or hop-less Routed) message from the mediator. `link` is a `MediatorLink` (`send(frame)`, `receive(timeoutMs)`): login and the socket are yours. |
+| `new MediatorCarrier({ identity, mediator, provider, link })` | Carries the client's messages through the agent's mediator. `carrier` wraps each Direct TSP message in a Routed message to the mediator with the provider as the remaining hop, and waits at most `replyTimeoutMs` (default 30 s) for the reply on the request's thread. `relate()` sends the TSP relationship invite and waits for the accept. `wrap` / `unwrap`: inbound frames are the provider's Direct message, or that message in a Nested (or hop-less Routed) message from the mediator. `link` is a `MediatorLink` (`send(frame)`, `receive(timeoutMs)`); `connectMediatorLink` makes one. |
+| `connectMediatorLink({ identity, mediatorDid, providerDid, login?, allowInsecure?, webSocketImpl?, maxQueue? })` | Logs in to the mediator and opens its WebSocket with `@openvtc/pnm-core`'s `connectMediatorSession` (the same login `@starter/tsp-client` uses), and resolves the mediator's TSP keys from its DID document. Returns `{ link, mediator, close }`. A `did:key` logs in with the X25519 key its DID document derives (`didKeyLogin`); a `did:peer:2` passes `login` (`keyAgreementKid`, `secretJwk` from `didPeerFromSeed`). A closed socket is not reopened: reads and sends then throw, the receive loop backs off and gives up, and you connect again. |
+| `new SocketMediatorLink(socket, { maxQueue, onDrop })` | The `MediatorLink` over an open socket (`sendBinary`, `onInboundTsp`, `close`, `isOpen`: pnm-core's `MediatorConnection`). Every inbound TSP frame goes on a queue (default at most 1000, the oldest dropped beyond that) that `receive` drains. The mediator deletes its copy once the frame is queued, so frames queued and not yet read are lost if the process ends; the provider re-sends an unacknowledged notice and the client de-duplicates on `noticeId`. |
 | `mc.run({ onInbound, signal, runForMs, minBackoffMs, maxBackoffMs, maxConsecutiveFailures })` | The receive loop: each read waits at most `pollTimeoutMs` (default 5 s); a message the provider pushes goes to `onInbound` (usually `client.receive`) and its reply goes back through the mediator; a link failure backs off from 500 ms, doubling to at most 30 s, and the loop rejects after 5 in a row; an unreadable frame, a reply nobody waits for, or a message `onInbound` throws on is dropped (`onDrop`). Stops on the signal or after `runForMs`. A notice read while a request waits is kept for the loop (at most `maxInbox`, default 100). |
 | `ResolvingProofVerifier({ resolveDid })` | Verifies Data Integrity proofs from any DID `resolveDid` resolves: the key must be listed in the issuer's DID document under the proof's purpose and controlled by the issuer; the signature is checked over the document as received (`eddsa-jcs-2022`, Ed25519). did:key issuers go to the library's verifier, unresolved. Never throws; `verifyDetailed` says why a proof failed. |
 | `didWebvhResolver(fetchText)`, `resolveDidWebvhLog(did, log, witness?)`, `didWebvhUrl(did)` | A `resolveDid` for did:webvh: fetches `did.jsonl` (and `did-witness.json`, when there is one) with your `fetchText` and **verifies the log** with `didwebvh-ts` (SCID, entry-hash chain, update-key proofs, witnesses) before using its document. |
@@ -138,6 +142,13 @@ The client takes the reference Context Client's place and every message is a rea
   nested delivery: the relationship invite, a held grant and a query; wrap and unwrap; a notice through the receive
   loop with its acknowledgement; a notice that arrives during a request; the reply timeout; backoff and giving up;
   dropped frames; the abort signal.
+- `link.test.ts`: `SocketMediatorLink` over a fake socket (queued and waiting reads, the bounded wait, a full queue, a
+  closed socket) and the `did:key` login key.
+- `live-mediator.test.ts`: **opt-in, skipped unless `HCP_LIVE_MEDIATOR_DID` is set.** The client and the reference
+  provider each log in to a real mediator with `connectMediatorLink` and exchange sealed TSP 1.0 messages through it:
+  the relationship invite and accept, a held grant, a query, a revocation notice and its acknowledgement; and a notice
+  pushed while the agent is logged out, delivered when it logs in again. `HCP_LIVE_MEDIATOR_INSECURE=1` allows an
+  `http://` mediator (a local test mediator only); `HCP_LIVE_REPORT=<prefix>` writes how each frame arrived.
 - `example.test.ts`: runs `examples/walkthrough.ts` end to end.
 - `tools.test.ts`: tool results and definitions never contain a token, including after revocation; directives are
   applied in code; the last guard.
@@ -148,13 +159,13 @@ run `npm run generate -w @starter/hcp-agent-client` (the generated `src/trust-ta
 
 ## What is still to do
 
-- **A live run through a mediator.** `MediatorCarrier` and its receive loop are tested only against a fake mediator
-  in front of the reference provider. Not checked live: the pinned mediator 0.48.0 forwarding a Routed message from
-  this client to a VTA and delivering the VTA's replies and notices back, in `MODE=tunnel`; and the mediator 0.52.0
-  that the VTA 0.83 lockfile names, against the 0.48.0 the starter pins. The VTA side of the agent's admission does
-  not exist yet either.
-- **A `MediatorLink` over a real socket** (login and the WebSocket, for example with `@openvtc/pnm-core` as
-  `@starter/tsp-client` does). The package leaves it to the caller.
+- **More live mediator runs.** `live-mediator.test.ts` has passed against the affinidi mediator 0.57.0 (its upstream
+  test-mediator fixture: in-memory store, `did:peer` identity, plain HTTP, open access list), with `did:key` parties.
+  That mediator delivered every message as the peer sealed it (the Routed layer removed, never wrapped in a Nested
+  message), and delivered a notice queued while the agent was logged out on its next login. After a logout it also
+  re-delivered the last frame read before it, once; the carrier drops that as a reply nobody waits for. Not run: the
+  production mediator binary with Redis, `MODE=tunnel` over https, the 0.48.0 the starter pins, a `did:peer:2` agent,
+  and a live VTA.
 - **The VTA side.** Holding and approving `hcp/grants/request`, `hcp/entries/query` and the revocation notices are being
   built in the VTA. Until they land, this package runs only against the reference provider.
 - **Directives (P1).** `applyDirectives` is the hook; no directive action is interpreted yet.

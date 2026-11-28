@@ -33,9 +33,9 @@ export async function walkthrough(log: (line: string) => void = () => undefined)
   const identity = identityFromKeys(C.sigPriv, C.encPriv); // DEMO ONLY keys: the reference Context Client's
   // 2. The provider. Live: (await resolveProvider(vtaDid, didWebvhResolver(fetchText))).keys
   const provider = { vid: P.vid, signingKey: P.sigPub, encryptionKey: P.encPub };
-  // 3. The mediator link. Live: a MediatorLink over your mediator socket (login and WebSocket are yours).
+  // 3. The mediator link. Live: const { link, mediator } = await connectMediatorLink({ identity, mediatorDid, providerDid: vtaDid })
   const link = new FakeMediator(world, referenceCarrier(world), "nested");
-  // 4. The mediator's keys. Live: from the mediator's DID document.
+  // 4. The mediator's keys. Live: `mediator` from connectMediatorLink (the mediator's DID document).
   const mc = new MediatorCarrier({ identity, mediator: MEDIATOR, provider, link, clock, onDrop: (r) => say(`dropped: ${r}`) });
 
   const client = new HcpAgentClient({

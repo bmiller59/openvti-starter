@@ -19,6 +19,16 @@ export {
   type ReceiveLoopResult,
 } from "./mediator.js";
 export {
+  SocketMediatorLink,
+  connectMediatorLink,
+  didKeyLogin,
+  type ConnectMediatorLinkOptions,
+  type MediatorConnectionLink,
+  type MediatorLogin,
+  type SocketMediatorLinkOptions,
+  type TspSocket,
+} from "./link.js";
+export {
   HcpAgentClient,
   MAX_USE_SECONDS,
   NOTICE_RETENTION_SECONDS,
