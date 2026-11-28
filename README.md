@@ -75,6 +75,7 @@ plus approving a gated task from a second key ([docs/APPROVALS.md](docs/APPROVAL
 | `packages/status-panel` | Dependency-free connection-status panel (vanilla TypeScript). |
 | `packages/rooms-client` | VTI data rooms: signed `rooms/*` calls to a room host, sealed tiers through a key service (VTA oracle or in-page MLS), chat/note/file envelope, polling feed, in-memory search, author profiles; `./mock` has an in-process host. See its [README](packages/rooms-client/README.md). |
 | `packages/polls-client` | Community polls on the VTI election tasks: build a poll, create it, vote through your VTA, read the result; an in-process mock. See its [README](packages/polls-client/README.md). |
+| `packages/hcp-agent-client` | An AI agent's side of HCP (the Human Context Protocol) as `hcp/*` Trust Tasks over TSP 1.0: ask for a grant and wait through the hold, query the person's context, honour revocation notices; a tool layer that keeps the access token out of the model's context. Tested against the shared HCP reference provider; not yet run against a live VTA. Node. See its [README](packages/hcp-agent-client/README.md). |
 | `templates/inbox-verifier` | Server that accepts signed documents (works offline). |
 | `templates/web-vta-app` | Browser app with a status page and optional wallet (vanilla TypeScript). |
 | `templates/community-dashboard` | React dashboard for the VTC member journey. |
