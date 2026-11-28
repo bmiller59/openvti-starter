@@ -10,7 +10,8 @@
   },
   "scripts": {
     "generate": "trust-tasks-gen-ts --lock trust-tasks.lock --out src/trust-tasks",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "example": "tsx examples/walkthrough.ts"
   },
   "dependencies": {
     "@noble/curves": "2.4.0",

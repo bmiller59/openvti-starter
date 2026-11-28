@@ -63,6 +63,15 @@ await mc.relate();                                                        // TSP
 const loop = mc.run({ onInbound: (m) => client.receive(m), signal });    // notices in, acknowledgements back
 ```
 
+A runnable version of all of this, offline, is [`examples/walkthrough.ts`](examples/walkthrough.ts): identity, the
+mediator carrier, a grant held and then approved, a query through the tool layer, and a revocation notice through the
+receive loop, against the vendored reference provider behind a fake mediator (the same setup as the tests). Four marked
+lines say what to swap for a live VTA. `test/example.test.ts` runs it, so it stays in step with the API.
+
+```sh
+npm run example -w @starter/hcp-agent-client
+```
+
 ## API
 
 | | |
@@ -125,10 +134,11 @@ The client takes the reference Context Client's place and every message is a rea
   seeds): the key under the proof's purpose, the controller, an unresolvable DID, the proof's own checks; the client's
   replies and revocation notices from that VTA, refused without `resolveDid`; and a did:webvh log that verifies, is
   tampered with, or is missing.
-- `mediator.test.ts`: the mediator carrier against a fake mediator in front of the reference provider, with direct and
+- `mediator.test.ts`: the mediator carrier against a fake mediator (`fake-mediator.ts`) in front of the reference provider, with direct and
   nested delivery: the relationship invite, a held grant and a query; wrap and unwrap; a notice through the receive
   loop with its acknowledgement; a notice that arrives during a request; the reply timeout; backoff and giving up;
   dropped frames; the abort signal.
+- `example.test.ts`: runs `examples/walkthrough.ts` end to end.
 - `tools.test.ts`: tool results and definitions never contain a token, including after revocation; directives are
   applied in code; the last guard.
 
