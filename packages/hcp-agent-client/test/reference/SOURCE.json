@@ -1,0 +1,11 @@
+{
+  "description": "The reference HCP provider and golden transcript shared by every HCP-over-Trust-Tasks implementation, vendored unmodified. Update all files together from one upstream commit, and the bundles and lock in the package root with them.",
+  "repository": "https://github.com/trustoverip/dtgwg-trust-tasks-tf",
+  "path": "examples/hcp-demo-ts",
+  "commit": "5b5a39793dc684351a3fcba4685d751d0bc7464e",
+  "files": {
+    "demo.ts": "b4459108eec449dc5693896df91244601787c5666ea5e5675caae7ab53ca5a1d",
+    "validator.ts": "580997eac7897c8a11dcf41c2e0cfe1a522f93454e4b2b9ac177347eb0387727",
+    "transcript.golden.txt": "914502ef62c11b15c6e5aff7c31fa1dcfa71bf6188f9c7c8479c912ec3ef6f90"
+  }
+}
