@@ -39,4 +39,14 @@ export {
   type ToolEntry,
   type ToolResult,
 } from "./tools.js";
-export { providerFromDidDocument, resolveProvider, type DidDocument, type ProviderEndpoint, type ResolveDid } from "./provider.js";
+export {
+  ed25519KeyOf,
+  providerFromDidDocument,
+  resolveProvider,
+  type DidDocument,
+  type ProviderEndpoint,
+  type ResolveDid,
+  type VerificationMethod,
+} from "./provider.js";
+export { ResolvingProofVerifier, type ResolvingProofVerifierOptions } from "./verifier.js";
+export { didWebvhResolver, didWebvhUrl, resolveDidWebvhLog, type FetchText } from "./webvh.js";

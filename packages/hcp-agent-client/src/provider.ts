@@ -13,10 +13,21 @@ import type { PeerKeys } from "./identity.js";
 /** The parts of a DID document this module reads. */
 export interface DidDocument {
   id: string;
-  verificationMethod?: { id: string; type: string; publicKeyMultibase?: string }[];
-  authentication?: (string | { id: string })[];
-  keyAgreement?: (string | { id: string })[];
+  verificationMethod?: VerificationMethod[];
+  authentication?: (string | VerificationMethod)[];
+  assertionMethod?: (string | VerificationMethod)[];
+  capabilityInvocation?: (string | VerificationMethod)[];
+  capabilityDelegation?: (string | VerificationMethod)[];
+  keyAgreement?: (string | VerificationMethod)[];
   service?: { id?: string; type: string | string[]; serviceEndpoint: unknown }[];
+}
+
+/** A verification method: listed in `verificationMethod`, or embedded in a relationship. */
+export interface VerificationMethod {
+  id: string;
+  type?: string;
+  controller?: string;
+  publicKeyMultibase?: string;
 }
 
 /** Resolves a DID to its document. */
@@ -48,6 +59,28 @@ function methodFor(doc: DidDocument, refs: (string | { id: string })[] | undefin
     if (bytes !== undefined) return bytes;
   }
   return undefined;
+}
+
+/** The signing relationships a proof may name; `keyAgreement` never signs. */
+const SIGNING_RELATIONSHIPS = ["authentication", "assertionMethod", "capabilityInvocation", "capabilityDelegation"] as const;
+
+/**
+ * The Ed25519 public key of verification method `vmId`, only when `doc` lists
+ * it under `purpose` (by reference, a relative `#id`, or embedded), its
+ * `controller` is the document's DID, and it is an Ed25519 multikey. Else
+ * undefined. A proof's key must pass this before its signature counts.
+ */
+export function ed25519KeyOf(doc: DidDocument, vmId: string, purpose: string): Uint8Array | undefined {
+  if (!(SIGNING_RELATIONSHIPS as readonly string[]).includes(purpose)) return undefined;
+  const abs = (id: string) => (id.startsWith("#") ? `${doc.id}${id}` : id);
+  const want = abs(vmId);
+  const refs = (doc as unknown as Record<string, (string | VerificationMethod)[] | undefined>)[purpose] ?? [];
+  const ref = refs.find((r) => abs(typeof r === "string" ? r : r.id) === want);
+  if (ref === undefined) return undefined;
+  const vm = typeof ref === "string" ? doc.verificationMethod?.find((m) => abs(m.id) === want) : ref;
+  if (vm === undefined || vm.controller !== doc.id || vm.publicKeyMultibase === undefined) return undefined;
+  if (vm.type !== undefined && vm.type !== "Multikey" && vm.type !== "Ed25519VerificationKey2020") return undefined;
+  return keyBytes(vm.publicKeyMultibase, ED25519_PUB);
 }
 
 /**

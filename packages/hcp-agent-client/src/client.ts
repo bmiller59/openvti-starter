@@ -26,9 +26,11 @@ import * as nextStep from "@openvtc/trust-tasks/trust-task-next-step/0.1/payload
 
 import { iso, randomId, systemClock, type Clock, type NewId } from "./clock.js";
 import { pairingFor, type AgentIdentity, type Pairing, type PeerKeys } from "./identity.js";
+import type { ResolveDid } from "./provider.js";
 import type { Carrier } from "./transport.js";
 import { HcpEntriesQuery_v0_1 as query, HcpGrantsRequest_v0_1 as grantRequest, HcpGrantsRevoked_v0_1 as revoked } from "./trust-tasks/index.js";
 import { retryAfterOf, schemaValidator, validateReply } from "./validate.js";
+import { ResolvingProofVerifier } from "./verifier.js";
 import { Wallet, type Copy, type GrantObject, type GrantView } from "./wallet.js";
 
 export type GrantAsk = grantRequest.Payload;
@@ -122,7 +124,15 @@ export interface HcpAgentClientOptions {
   carrier: Carrier;
   clock?: Clock;
   newId?: NewId;
-  /** Verifies proofs on replies and notices. Defaults to the did:key Data Integrity verifier. */
+  /**
+   * Resolves the provider's DID when it is not a did:key (a did:webvh VTA, say), so its proofs verify. Used by the
+   * default verifier; see {@link ResolvingProofVerifier} and `didWebvhResolver`.
+   */
+  resolveDid?: ResolveDid;
+  /**
+   * Verifies proofs on replies and notices. Defaults to {@link ResolvingProofVerifier} over `resolveDid` when one is
+   * given, else to the did:key Data Integrity verifier.
+   */
   proofVerifier?: ProofVerifier;
   /** Stop waiting on a held request after this many seconds (default 600). */
   maxHoldSeconds?: number;
@@ -168,7 +178,12 @@ export class HcpAgentClient {
     this.carrier = options.carrier;
     this.clock = options.clock ?? systemClock;
     this.newId = options.newId ?? randomId;
-    this.verifier = options.proofVerifier ?? new DataIntegrityProofVerifier({ now: () => this.clock.now() });
+    const now = () => this.clock.now();
+    this.verifier =
+      options.proofVerifier ??
+      (options.resolveDid !== undefined
+        ? new ResolvingProofVerifier({ resolveDid: options.resolveDid, now })
+        : new DataIntegrityProofVerifier({ now }));
     this.maxHoldSeconds = options.maxHoldSeconds ?? 600;
     this.observer = options.observer ?? {};
     this.onRevoked = options.onRevoked;
