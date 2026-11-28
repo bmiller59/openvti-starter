@@ -128,10 +128,11 @@ run `npm run generate -w @starter/hcp-agent-client` (the generated `src/trust-ta
 
 ## Assumptions and open questions
 
-- **The pairing number's bytes.** The designs say "the first four decimal digits of SHA-256 over the `threadId` and the
-  client VID". This package hashes the UTF-8 of `threadId`, a line feed, and the VID, and takes the first four bytes
-  of the digest as a big-endian integer modulo 10000 (`pairingNumber`; a test vector is in `client.test.ts`). The
-  wallet must compute the same; until one layout is agreed, this one is an assumption.
+- **The pairing number** is Keyring's match number: the first 4 bytes of
+  `SHA-256(UTF-8(threadId) || 0x00 || UTF-8(vid))` as an unsigned big-endian 32-bit integer, modulo 10000, four digits
+  with leading zeros (Keyring's `packages/core/src/modules/connected-agents/hcp/matchNumber.ts`). Keyring's five shared
+  vectors are vendored unmodified in [`test/vectors/match-number.json`](test/vectors/match-number.json), and
+  `client.test.ts` checks `pairingNumber` against every one.
 - **The `useUntil` cap.** The client applies min(response + 1 h, grant `expiresAt`) to every copy. The reference
   provider writes response + 1 h even when the grant ends sooner; the client's cap covers that.
 - **Resubmission and the replay record.** A provider's library may answer a re-delivered copy of an earlier

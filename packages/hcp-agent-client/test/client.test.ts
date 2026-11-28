@@ -4,6 +4,7 @@
 // deterministic (fixed DEMO ONLY keys, ids and clock).
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { signTrustTask } from "@openvtc/trust-tasks-proof";
@@ -48,9 +49,21 @@ test("pairing: the QR carries the VID, threadId and VTA DID, and the number is f
   assert.deepEqual(JSON.parse(pairing.qr), { vid: client.vid, threadId: sent[0]!.threadId, vtaDid: sent[0]!.recipient });
   assert.match(pairing.number, /^\d{4}$/);
   assert.equal(pairing.number, pairingNumber(pairing.threadId, pairing.vid));
-  // A fixed vector, so another implementation can check its derivation.
-  assert.equal(pairingNumber("urn:uuid:00000000-0000-4000-8000-000000000003", "did:example:agent"), "3092");
   assert.notEqual(pairingNumber("urn:uuid:a", "did:example:agent"), pairingNumber("urn:uuid:b", "did:example:agent"));
+});
+
+test("pairing number: Keyring's shared vectors (SHA-256 over threadId, 0x00, VID; big-endian uint32 mod 10000)", () => {
+  // Vendored unmodified from Keyring's packages/core/src/modules/connected-agents/hcp/__tests__/vectors/match-number.json,
+  // the vectors its hcpMatchNumber (…/hcp/matchNumber.ts) is tested against.
+  const vectors = JSON.parse(readFileSync(new URL("vectors/match-number.json", import.meta.url), "utf8")) as {
+    version: number;
+    cases: { threadId: string; clientVid: string; number: string }[];
+  };
+  assert.equal(vectors.version, 1);
+  assert.equal(vectors.cases.length, 5);
+  for (const c of vectors.cases) assert.equal(pairingNumber(c.threadId, c.clientVid), c.number, `${c.threadId} ${c.clientVid}`);
+  const first = vectors.cases[0]!;
+  assert.notEqual(pairingNumber(`${first.threadId.slice(0, -1)}2`, first.clientVid), first.number, "one byte of threadId changed");
 });
 
 test("resubmit after the grant: a new token under the same grant, and both tokens stay valid", async () => {

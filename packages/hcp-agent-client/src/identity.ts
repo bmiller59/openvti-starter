@@ -66,17 +66,19 @@ export interface Pairing {
 }
 
 /**
- * The four-digit number for a grant request on `threadId` from `vid`.
+ * The four-digit match number for a grant request on `threadId` from `vid`:
+ * the first 4 bytes of `SHA-256(UTF-8(threadId) || 0x00 || UTF-8(vid))`, read
+ * as an unsigned big-endian 32-bit integer, modulo 10000, as 4 decimal digits
+ * with leading zeros. `threadId` is the full `urn:uuid:…`.
  *
- * Derived from SHA-256 over the UTF-8 bytes of `threadId`, one line feed
- * (0x0A), and `vid`: the first four bytes of the digest as a big-endian
- * unsigned integer, modulo 10000, written as four decimal digits. The
- * designs say only "the first four decimal digits of SHA-256 over the
- * `threadId` and the VID"; this byte layout is this package's assumption until
- * the wallet side fixes one (see README, "Open questions").
+ * The same layout as Keyring's `hcpMatchNumber`
+ * (`packages/core/src/modules/connected-agents/hcp/matchNumber.ts`), checked
+ * against its shared vectors in `test/vectors/match-number.json`.
  */
 export function pairingNumber(threadId: string, vid: string): string {
-  const digest = createHash("sha256").update(`${threadId}\n${vid}`, "utf8").digest();
+  const digest = createHash("sha256")
+    .update(Buffer.concat([Buffer.from(threadId, "utf8"), Buffer.from([0]), Buffer.from(vid, "utf8")]))
+    .digest();
   return String(digest.readUInt32BE(0) % 10000).padStart(4, "0");
 }
 

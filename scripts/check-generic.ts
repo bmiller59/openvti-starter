@@ -9,13 +9,14 @@ import { readFileSync } from "node:fs";
 import { hasGit, repoFiles } from "./lib/files.js";
 
 const B58 = "[1-9A-HJ-NP-Za-km-z]";
-const GOLDEN_PATH = "packages/hcp-agent-client/test/reference/transcript.golden.txt";
-const GOLDEN = new RegExp(`^${GOLDEN_PATH.replace(/[.]/g, "\\.")}$`);
+// Shared HCP test vectors, vendored unmodified: the golden transcript's did:keys are the upstream DEMO ONLY keys
+// (32 repeated bytes) and the match-number vectors use the did:key specification's public example keys.
+const VECTOR_PATHS = ["packages/hcp-agent-client/test/reference/transcript.golden.txt", "packages/hcp-agent-client/test/vectors/match-number.json"];
+const GOLDEN = new RegExp(`^(${VECTOR_PATHS.map((p) => p.replace(/[.]/g, "\\.")).join("|")})$`);
 // [label, pattern, optional path allow-list]
 const RULES: [string, RegExp, RegExp?][] = [
   ["email address", /[A-Za-z0-9._%+-]+@(?!example\.)[A-Za-z0-9-]+\.(com|edu|org|net|io|dev|ai)\b/i],
   ["did:webvh with a concrete scid", new RegExp(`did:webvh:Qm${B58}{20,}`)],
-  // The shared HCP golden transcript is vendored unmodified; its did:keys are the upstream DEMO ONLY keys (32 repeated bytes).
   ["did:key with a concrete key", new RegExp(`did:key:z6Mk${B58}{30,}`), GOLDEN],
   ["bare ed25519 multibase key", new RegExp(`\\bz6Mk${B58}{30,}`), GOLDEN],
   ["private key material", /privateKeyMultibase["']?\s*[:=]\s*["']z[1-9A-Za-z]{20,}/],
@@ -52,7 +53,7 @@ if (process.argv.includes("--history") && !GIT) {
   console.log("check:generic: no git history here (a ZIP download?), so --history was skipped; the files were scanned.");
 } else if (process.argv.includes("--history")) {
   for (const c of git("rev-list", "HEAD").split("\n").filter(Boolean)) {
-    const show = git("show", "--format=%B", "--no-color", "-U0", c, "--", ".", `:!${SELF}`, ":!package-lock.json", `:!${GOLDEN_PATH}`);
+    const show = git("show", "--format=%B", "--no-color", "-U0", c, "--", ".", `:!${SELF}`, ":!package-lock.json", ...VECTOR_PATHS.map((p) => `:!${p}`));
     // The author and Signed-off-by trailer identify the committer by design; everything else must be generic.
     scan(`commit ${c.slice(0, 8)}`, show.split("\n").filter((l) => !/^Signed-off-by:/i.test(l)).join("\n"));
   }
