@@ -1,0 +1,32 @@
+{
+  "name": "@starter/hcp-agent-client",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "description": "An HCP (Human Context Protocol) agent client over Trust Tasks and TSP 1.0: asks for a grant and waits through the hold, queries the person's context, honours revocation notices, and gives a model tools that never see the access token. Node.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "trust-tasks-gen-ts --lock trust-tasks.lock --out src/trust-tasks",
+    "test": "tsx --test test/*.test.ts",
+    "example": "tsx examples/walkthrough.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@openvtc/pnm-core": "0.9.1",
+    "@openvtc/trust-tasks": "0.31.11",
+    "@openvtc/trust-tasks-proof": "0.2.5",
+    "@openvtc/trust-tasks-tsp": "0.2.1",
+    "@openvtc/vti-tsp-js": "0.4.0",
+    "@scure/base": "2.4.0",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "didwebvh-ts": "2.8.0"
+  },
+  "devDependencies": {
+    "@openvtc/trust-tasks-gen": "0.2.3"
+  }
+}
