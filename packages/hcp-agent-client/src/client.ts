@@ -415,7 +415,7 @@ export class HcpAgentClient {
       receiverVid: this.provider.vid,
       keys: { senderSigningKey: this.identity.signingKey, receiverEncryptionKey: this.provider.encryptionKey },
     });
-    const replyWire = await this.carrier(wire);
+    const replyWire = await this.carrier(wire, { id: doc.id, threadId: doc.threadId ?? doc.id });
     const opened = await unpackTrustTask(replyWire, {
       recipientVid: this.vid,
       keys: { receiverDecryptionKey: this.identity.decryptionKey, senderSigningKey: this.provider.signingKey },

@@ -9,7 +9,15 @@ export {
   type Pairing,
   type PeerKeys,
 } from "./identity.js";
-export type { Carrier } from "./transport.js";
+export type { Carrier, CarrierContext } from "./transport.js";
+export {
+  MediatorCarrier,
+  type InboundHandler,
+  type MediatorCarrierOptions,
+  type MediatorLink,
+  type ReceiveLoopOptions,
+  type ReceiveLoopResult,
+} from "./mediator.js";
 export {
   HcpAgentClient,
   MAX_USE_SECONDS,

@@ -44,14 +44,11 @@ export interface Harness {
 
 export const QUERY = { query: "How does Alex like to fly?", categories: ["travel_preferences"], purpose: "https://purposes.example/travel-booking", maxEntries: 5 };
 
-export function harness(options: Partial<HcpAgentClientOptions> = {}, world = new World()): Harness {
+/** The reference provider as a carrier: opens a sealed request, runs the provider's consumer and handler, seals the reply. */
+export function referenceCarrier(world: World): Carrier {
   const internals = world as unknown as WorldInternals;
-  const { provider: P, contextClient: C } = world;
-  const print = (from: string, to: string, doc: TrustTaskDocument<unknown>) =>
-    world.transcript.push(`--> ${from} -> ${to} (TSP) ${doc.type}\n${pretty(redact(doc))}\n`);
-  const sent: TrustTaskDocument<any>[] = [];
-
-  const carrier: Carrier = async (wire) => {
+  const P = world.provider;
+  return async (wire) => {
     const sender = world.byVid(advertisedSender(wire)!);
     const unpacked = await unpackTrustTask(wire, { recipientVid: P.vid, keys: { receiverDecryptionKey: P.encPriv, senderSigningKey: sender.sigPub } });
     const spec = SPECS[unpacked.document.type.split("#")[0]!];
@@ -61,6 +58,15 @@ export function harness(options: Partial<HcpAgentClientOptions> = {}, world = ne
     if (received.reply === undefined) throw new Error(`no reply: ${received.outcome.kind}`);
     return consumer.packReply(received);
   };
+}
+
+export function harness(options: Partial<HcpAgentClientOptions> = {}, world = new World()): Harness {
+  const { provider: P, contextClient: C } = world;
+  const print = (from: string, to: string, doc: TrustTaskDocument<unknown>) =>
+    world.transcript.push(`--> ${from} -> ${to} (TSP) ${doc.type}\n${pretty(redact(doc))}\n`);
+  const sent: TrustTaskDocument<any>[] = [];
+
+  const carrier = referenceCarrier(world);
 
   const client = new HcpAgentClient({
     identity: identityFromKeys(C.sigPriv, C.encPriv), // DEMO ONLY keys: the registered Context Client's
